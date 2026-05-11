@@ -45,6 +45,8 @@ Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-w
 | `/ingest <path>` | Run the Ingest workflow on a file in `raw/` — generates a summary page, creates/updates concept and entity pages, adds cross-links, updates `wiki/index.md` and `wiki/log.md`. |
 | `/query <question>` | Search the wiki and synthesize an answer with `[[wiki-link]]` citations. Creates a synthesis page in `wiki/syntheses/` if the answer reveals novel insight. |
 | `/lint` | Audit the wiki for orphans, contradictions, missing links, and incomplete sections. Fixes what it can and reports the rest. |
+| `/flashcards <page>` | Generate obsidian-spaced-repetition cards from a wiki page into `wiki/flashcards/<slug>.md`. Uses basic, reversed, and cloze formats. |
+| `/present <topic>` | Generate a Marp slide deck on a topic from relevant wiki content into `wiki/presentations/<slug>.md`. References every cited page. |
 
 ### Skill (alternative entry point)
 
@@ -53,6 +55,8 @@ Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-w
 /skill:wiki-maintainer ingest <path>
 /skill:wiki-maintainer query <question>
 /skill:wiki-maintainer lint
+/skill:wiki-maintainer flashcards <page>
+/skill:wiki-maintainer present <topic>
 ```
 
 ### Binary (no pi required)

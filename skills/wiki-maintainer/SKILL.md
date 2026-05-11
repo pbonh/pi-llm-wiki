@@ -1,6 +1,6 @@
 ---
 name: wiki-maintainer
-description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
+description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards and Marp presentations, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
 ---
 
 # wiki-maintainer
@@ -43,6 +43,30 @@ Run the Lint workflow:
 3. Fix what is fixable from existing sources; report the rest for human judgment.
 4. Suggest sources or topics worth investigating.
 5. Append a `lint` entry to `wiki/log.md`.
+
+Lint does **not** flag pages missing flashcards or presentations — those workflows are explicit.
+
+### `flashcards <page>`
+
+Run the Flashcards workflow on a wiki page (e.g. `concepts/braising`, `entities/cast-iron-skillet`):
+
+1. Read the source page.
+2. Derive cards from its content — definitions, parameters, key points — and choose the right syntax for each: basic (`Q\n?\nA`), reversed (`Q\n??\nA`) for symmetric pairs, cloze (`==hidden==`) for fill-in-the-blank.
+3. Write `wiki/flashcards/<page-slug>.md` with `type: flashcards` and `tags:` that includes `flashcards` (required by the obsidian-spaced-repetition plugin).
+4. Link source page ↔ cards file bidirectionally.
+5. Update `wiki/index.md` and append to `wiki/log.md`.
+
+### `present <topic>`
+
+Run the Presentation workflow to produce a Marp slide deck on a topic:
+
+1. Find relevant pages via `wiki/index.md` (same retrieval as `query`) and read them.
+2. Stitch their key claims into slides: title → outline → one section per concept/entity → references.
+3. Write `wiki/presentations/<topic-slug>.md` with Marp frontmatter (`marp: true`, `theme: default`, `paginate: true`) plus the standard wiki frontmatter; slides separated by `---`.
+4. Every cited page appears as a wiki link on the References slide.
+5. Update `wiki/index.md` and append to `wiki/log.md`. No paired synthesis page.
+
+If the wiki can't support a coherent deck on the topic, say so and suggest sources — do not invent claims.
 
 ### `new <domain>`
 

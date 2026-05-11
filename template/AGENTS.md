@@ -16,7 +16,8 @@ This is an LLM-maintained knowledge base on [YOUR TOPIC]. The LLM writes and mai
 - `wiki/entities/` — Entity pages (people, tools, organizations, products — whatever "things" exist in your domain).
 - `wiki/syntheses/` — Comparison tables, decision frameworks, cross-cutting analyses.
 - `wiki/journal/` — Research or session journal entries.
-- `wiki/presentations/` — Marp slide decks generated from wiki content.
+- `wiki/flashcards/` — One flashcard file per source wiki page, formatted for the [obsidian-spaced-repetition](https://github.com/st3v3nmw/obsidian-spaced-repetition) plugin. Populated by the Flashcards workflow.
+- `wiki/presentations/` — Marp slide decks synthesized from wiki content. Populated by the Presentation workflow.
 
 ## File Naming
 
@@ -31,7 +32,7 @@ Every wiki page uses this frontmatter and structure:
 ```yaml
 ---
 title: "Page Title"
-type: concept | entity | summary | synthesis
+type: concept | entity | summary | synthesis | flashcards | presentation
 tags: [tag1, tag2, tag3]
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
@@ -67,6 +68,20 @@ confidence: high | medium | low
 - `## Analysis` — Cross-cutting insights
 - `## Recommendations` — When to prefer which approach
 - `## Pages Compared` — Links to all pages involved
+
+**Flashcard pages** (`wiki/flashcards/`):
+- `tags:` frontmatter must include `flashcards` — the obsidian-spaced-repetition plugin uses this tag to discover cards
+- `## Source` — Single wiki link back to the page these cards were derived from
+- `## Cards` — The cards themselves, separated by blank lines, using the multi-line formats:
+  - Basic: `Question` on one line, `?` on its own line, `Answer` on the next line
+  - Reversed (term ↔ definition pairs that should drill both ways): `Question` / `??` / `Answer`
+  - Cloze (fill-in-the-blank inside a sentence): wrap the hidden span in `==double-equals==`
+
+**Presentation pages** (`wiki/presentations/`):
+- Frontmatter must include `marp: true` plus `theme: default` and `paginate: true` (Marp configuration), in addition to the standard wiki frontmatter
+- Slides are separated by `---` on its own line (standard Marp convention)
+- `## Outline` slide near the top listing the sections of the deck
+- `## References` slide at the end listing every cited wiki page as a wiki link
 
 ## Linking Conventions
 
@@ -132,6 +147,42 @@ When the user says "lint" or "health check":
 4. Report issues that need human judgment
 5. Suggest new sources or topics to investigate
 6. Update log
+
+Lint does **not** flag pages that lack a corresponding flashcard or presentation file — those workflows are explicit and on-demand.
+
+### Flashcards
+
+When the user says "flashcards [page]" — argument is a wiki page path such as `concepts/braising` or `entities/cast-iron-skillet`:
+
+1. Read the source page in full
+2. Derive cards from the page's content. For **concept pages**: pull from `## Definition`, `## How It Works`, `## Key Parameters`, `## When To Use`, and `## Risks & Pitfalls`. For **entity pages**: pull from `## Overview` and `## Characteristics`. For **summary pages**: pull from `## Key Points`.
+3. Choose the right format for each card:
+   - **Basic** (`Q` / `?` / `A`) — one-way recall (the default; use this for most cards)
+   - **Reversed** (`Q` / `??` / `A`) — symmetric term ↔ definition pairs where the user should drill both directions
+   - **Cloze** (`==hidden==`) — fill-in-the-blank inside a sentence; good for highlighting key terms in their natural context
+4. Write `wiki/flashcards/<page-slug>.md` with frontmatter (`title`, `type: flashcards`, `tags: [flashcards, ...source-page-tags]`, `created`, `updated`, `sources: ["wiki/<path>"]`), a `## Source` section with a single wiki link to the source page, and a `## Cards` section containing the cards separated by blank lines
+5. Add a cross-link back from the source page (a `## Flashcards` link line) so the source and cards stay discoverable from each other
+6. Update `wiki/index.md` — add an entry under the Flashcards table
+7. Append a dated entry to `wiki/log.md` recording the source page and cards file
+
+The `flashcards` tag on the frontmatter is **required** — without it the obsidian-spaced-repetition plugin will not find the cards. Prefer rewriting an existing flashcards file over creating a new one if the source page is re-ingested.
+
+### Presentation
+
+When the user says "present [topic]" or "presentation [topic]" — argument is a topic or question, not a page path:
+
+1. Read `wiki/index.md` to identify pages relevant to the topic (same retrieval as Query)
+2. Read those pages in full
+3. Generate a Marp slide deck with these slides, separated by `---` on its own line:
+   - **Title slide** — `# <Topic>`, with a subtitle line summarizing the deck
+   - **Outline slide** — `## Outline` followed by a bulleted list of sections
+   - **Content slides** — one section per concept or entity, with the key claims pulled from the source pages. Keep each slide short (3–6 bullets or a single diagram/example)
+   - **References slide** — `## References` followed by a wiki-link line for every page cited
+4. Write `wiki/presentations/<topic-slug>.md` with Marp frontmatter (`marp: true`, `theme: default`, `paginate: true`) merged with the standard wiki frontmatter (`title`, `type: presentation`, `tags`, `created`, `updated`, `sources` listing every cited wiki page)
+5. Update `wiki/index.md` — add an entry under the Presentations table
+6. Append a dated entry to `wiki/log.md` recording the topic, deck path, and pages cited
+
+If the wiki lacks enough material to build a coherent deck on the requested topic, say so and suggest sources that would fill the gap — do not invent claims. The Presentation workflow does **not** create a synthesis page; it only produces the deck.
 
 ## Rules
 
