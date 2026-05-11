@@ -1,0 +1,15 @@
+{
+  "name": "pi-llm-wiki",
+  "version": "0.1.0",
+  "description": "pi coding agent integration for the llm-wiki template — slash commands and a skill for ingesting sources, querying, linting, and bootstrapping new wikis (template bundled, no clone required)",
+  "keywords": ["pi-package", "pi", "llm-wiki", "knowledge-base", "wiki"],
+  "bin": {
+    "pi-llm-wiki-init": "./bin/init.js"
+  },
+  "files": ["prompts", "skills", "template", "bin", "README.md"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pbonh/pi-llm-wiki.git"
+  },
+  "license": "MIT"
+}
