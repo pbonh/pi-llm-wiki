@@ -2,7 +2,7 @@
 
 [pi coding agent](https://pi.dev/docs/latest) integration for the [llm-wiki](https://github.com/pbonh/llm-wiki) template.
 
-Adds four slash commands and one skill to pi, plus a standalone init binary. **The template is bundled** — you do not need to clone `llm-wiki` separately. `npm install -g pi-llm-wiki`, run `pi` in any directory (empty or existing), and `/wiki:new` will scaffold and customize a wiki for you.
+Adds four slash commands and one skill to pi, plus a standalone init binary. **The template is bundled** — you do not need to clone `llm-wiki` separately. `npm install -g pi-llm-wiki`, run `pi` in any directory (empty or existing), and `/wiki-new` will scaffold and customize a wiki for you.
 
 ## Install
 
@@ -28,25 +28,25 @@ pi
 In pi:
 
 ```
-/wiki:new a knowledge base about espresso extraction
+/wiki-new a knowledge base about espresso extraction
 ```
 
 pi will detect the directory is empty, run `pi-llm-wiki-init` to drop the bundled template into place, then walk through the `<!--` customization markers in `AGENTS.md` — the Purpose paragraph, the Tagging Taxonomy, and any future customization blocks — confirming taxonomy choices with you before committing.
 
 ### Operate an existing wiki
 
-Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-wiki schema. The same commands work — `/wiki:new` will skip re-initialization and go straight to customizing whatever markers remain.
+Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-wiki schema. The same commands work — `/wiki-new` will skip re-initialization and go straight to customizing whatever markers remain.
 
 ### Slash commands
 
 | Command | What it does |
 |---|---|
-| `/wiki:new <domain>` | Bootstrap a wiki in the cwd. Drops the bundled template if `AGENTS.md` is missing, then customizes every `<!-- ... -->` block. |
-| `/ingest <path>` | Run the Ingest workflow on a file in `raw/` — generates a summary page, creates/updates concept and entity pages, adds cross-links, updates `wiki/index.md` and `wiki/log.md`. |
-| `/query <question>` | Search the wiki and synthesize an answer with `[[wiki-link]]` citations. Creates a synthesis page in `wiki/syntheses/` if the answer reveals novel insight. |
-| `/lint` | Audit the wiki for orphans, contradictions, missing links, and incomplete sections. Fixes what it can and reports the rest. |
-| `/flashcards <page>` | Generate obsidian-spaced-repetition cards from a wiki page into `wiki/flashcards/<slug>.md`. Uses basic, reversed, and cloze formats. |
-| `/present <topic>` | Generate a Marp slide deck on a topic from relevant wiki content into `wiki/presentations/<slug>.md`. References every cited page. |
+| `/wiki-new <domain>` | Bootstrap a wiki in the cwd. Drops the bundled template if `AGENTS.md` is missing, then customizes every `<!-- ... -->` block. |
+| `/wiki-ingest <path>` | Run the Ingest workflow on a file in `raw/` — generates a summary page, creates/updates concept and entity pages, adds cross-links, updates `wiki/index.md` and `wiki/log.md`. |
+| `/wiki-query <question>` | Search the wiki and synthesize an answer with `[[wiki-link]]` citations. Creates a synthesis page in `wiki/syntheses/` if the answer reveals novel insight. |
+| `/wiki-lint` | Audit the wiki for orphans, contradictions, missing links, and incomplete sections. Fixes what it can and reports the rest. |
+| `/wiki-flashcards <page>` | Generate obsidian-spaced-repetition cards from a wiki page into `wiki/flashcards/<slug>.md`. Uses basic, reversed, and cloze formats. |
+| `/wiki-present <topic>` | Generate a Marp slide deck on a topic from relevant wiki content into `wiki/presentations/<slug>.md`. References every cited page. |
 
 ### Skill (alternative entry point)
 
@@ -75,7 +75,7 @@ pi-llm-wiki-init
 
 `pi-llm-wiki` does not duplicate the wiki schema in its prompts or skill. The slash commands and skill point pi at `AGENTS.md` and tell it to follow the workflows defined there — Ingest, Query, Lint. The schema in `AGENTS.md` (which is what ships in `template/AGENTS.md`) is the source of truth.
 
-The `<!--` HTML comments in `AGENTS.md` mark the customization points. `/wiki:new` enumerates them with `grep`, treats the comment text as the spec for what to fill in, and verifies completion by re-running `grep` and requiring zero matches. New customization blocks added to `AGENTS.md` upstream are automatically handled — no `pi-llm-wiki` change needed.
+The `<!--` HTML comments in `AGENTS.md` mark the customization points. `/wiki-new` enumerates them with `grep`, treats the comment text as the spec for what to fill in, and verifies completion by re-running `grep` and requiring zero matches. New customization blocks added to `AGENTS.md` upstream are automatically handled — no `pi-llm-wiki` change needed.
 
 ## Keeping the bundled template in sync with upstream
 

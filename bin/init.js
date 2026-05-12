@@ -13,7 +13,7 @@ if (!fs.existsSync(TEMPLATE_DIR)) {
 
 if (fs.existsSync(path.join(TARGET, 'AGENTS.md'))) {
   console.error(`pi-llm-wiki-init: AGENTS.md already exists in ${TARGET}`);
-  console.error('This directory already looks like an llm-wiki. Run /wiki:new to customize it in place,');
+  console.error('This directory already looks like an llm-wiki. Run /wiki-new to customize it in place,');
   console.error('or move/remove AGENTS.md if you really want to re-initialize from the bundled template.');
   process.exit(1);
 }
@@ -51,5 +51,5 @@ if (skipped.length > 0) {
 }
 console.log('');
 console.log('Next:');
-console.log('  1. Run /wiki:new <domain description> in pi to customize the placeholders.');
-console.log('  2. Drop source files into raw/ and run /ingest <path>.');
+console.log('  1. Run /wiki-new <domain description> in pi to customize the placeholders.');
+console.log('  2. Drop source files into raw/ and run /wiki-ingest <path>.');

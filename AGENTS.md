@@ -16,26 +16,26 @@ pi
 
 Then inside pi:
 
-1. `/wiki:new a knowledge base on <domain>` — if the directory has no `AGENTS.md`, the slash command runs `pi-llm-wiki-init` to drop the bundled template (AGENTS.md, wiki/, raw/, .gitignore) into place. Then it customizes the `<!--` markers in `AGENTS.md`: fills in the Purpose paragraph from the domain description, proposes a tagging taxonomy and confirms it with the user, and strips the markers.
+1. `/wiki-new a knowledge base on <domain>` — if the directory has no `AGENTS.md`, the slash command runs `pi-llm-wiki-init` to drop the bundled template (AGENTS.md, wiki/, raw/, .gitignore) into place. Then it customizes the `<!--` markers in `AGENTS.md`: fills in the Purpose paragraph from the domain description, proposes a tagging taxonomy and confirms it with the user, and strips the markers.
 
 2. Drop source documents (articles, transcripts, notes) into `raw/`.
 
-3. `/ingest raw/<file>` — the agent reads the source and produces a summary page, plus concept and entity pages, cross-linked, indexed, and logged.
+3. `/wiki-ingest raw/<file>` — the agent reads the source and produces a summary page, plus concept and entity pages, cross-linked, indexed, and logged.
 
-4. `/query <question>` — the agent searches the wiki and answers with `[[wiki-link]]` citations. Novel insights become synthesis pages.
+4. `/wiki-query <question>` — the agent searches the wiki and answers with `[[wiki-link]]` citations. Novel insights become synthesis pages.
 
-5. `/lint` — the agent audits for orphans, missing links, contradictions, and incomplete sections.
+5. `/wiki-lint` — the agent audits for orphans, missing links, contradictions, and incomplete sections.
 
-6. `/flashcards <page>` — the agent generates obsidian-spaced-repetition cards (basic, reversed, cloze) from any wiki page into `wiki/flashcards/<slug>.md`.
+6. `/wiki-flashcards <page>` — the agent generates obsidian-spaced-repetition cards (basic, reversed, cloze) from any wiki page into `wiki/flashcards/<slug>.md`.
 
-7. `/present <topic>` — the agent stitches relevant wiki pages into a Marp slide deck at `wiki/presentations/<slug>.md`.
+7. `/wiki-present <topic>` — the agent stitches relevant wiki pages into a Marp slide deck at `wiki/presentations/<slug>.md`.
 
 `AGENTS.md` (the one inside the user's wiki, copied from `template/AGENTS.md`) is the source of truth for page format and all five workflows. The slash commands and skill in this package delegate to it rather than restating the rules.
 
 ## Repo layout
 
 ```
-prompts/          pi slash commands: /wiki:new, /ingest, /query, /lint, /flashcards, /present
+prompts/          pi slash commands: /wiki-new, /wiki-ingest, /wiki-query, /wiki-lint, /wiki-flashcards, /wiki-present
 skills/           pi skill bundle: wiki-maintainer (same workflows, skill UX)
 template/         snapshot of the llm-wiki template — what pi-llm-wiki-init copies
 bin/init.js       the pi-llm-wiki-init CLI (copies template/ into cwd)

@@ -36,13 +36,13 @@ Master catalog of all wiki pages. Every page in the wiki must have an entry here
 
 | Page | Source | Cards | Updated |
 |------|--------|-------|---------|
-| <!-- entries added by LLM during /flashcards --> | | | |
+| <!-- entries added by LLM during /wiki-flashcards --> | | | |
 
 ## Presentations
 
 | Page | Topic | Pages Cited | Updated |
 |------|-------|-------------|---------|
-| <!-- entries added by LLM during /present --> | | | |
+| <!-- entries added by LLM during /wiki-present --> | | | |
 
 ## Statistics
 

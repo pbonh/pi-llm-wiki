@@ -26,4 +26,4 @@ Step 3 — commit.
 
 If the directory is a git repo (or you just created one via `git init`), stage and commit with the message: `Customize llm-wiki for <domain>`. If the user prefers not to initialize git, skip the commit.
 
-Do not ingest any sources yet — leave `raw/` empty. The user will add sources and run `/ingest` next.
+Do not ingest any sources yet — leave `raw/` empty. The user will add sources and run `/wiki-ingest` next.
