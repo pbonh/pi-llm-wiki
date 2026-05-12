@@ -1,3 +1,4 @@
+<!-- CUSTOMIZE: Replace [Your Domain] with a short title for this knowledge base (e.g. "Machine Learning", "19th-Century Literature", "SaaS Competitive Landscape"). -->
 # [Your Domain] Knowledge Base — Schema
 
 ## Purpose
