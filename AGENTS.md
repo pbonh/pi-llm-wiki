@@ -30,12 +30,14 @@ Then inside pi:
 
 7. `/wiki-present <topic>` — the agent stitches relevant wiki pages into a Marp slide deck at `wiki/presentations/<slug>.md`.
 
+8. `/pdf-to-mdbook <path>` — the agent converts a PDF (scanned, structured, textbook, or paper) into a runnable [mdBook](https://rust-lang.github.io/mdBook/) under `wiki/books/<slug>/`. Auto-OCRs scanned PDFs, prefers the embedded outline and falls back to vision-based structure recovery, validates with `mdbook build`, and writes a paired `wiki/summaries/<slug>.md`. Requires `poppler`, `ocrmypdf`, `tesseract`, `mdbook`, and `python3`+`pypdf` on PATH.
+
 `AGENTS.md` (the one inside the user's wiki, copied from `template/AGENTS.md`) is the source of truth for page format and all five workflows. The slash commands and skill in this package delegate to it rather than restating the rules.
 
 ## Repo layout
 
 ```
-prompts/          pi slash commands: /wiki-new, /wiki-ingest, /wiki-query, /wiki-lint, /wiki-flashcards, /wiki-present
+prompts/          pi slash commands: /wiki-new, /wiki-ingest, /wiki-query, /wiki-lint, /wiki-flashcards, /wiki-present, /pdf-to-mdbook
 skills/           pi skill bundle: wiki-maintainer (same workflows, skill UX)
 template/         snapshot of the llm-wiki template — what pi-llm-wiki-init copies
 bin/init.js       the pi-llm-wiki-init CLI (copies template/ into cwd)

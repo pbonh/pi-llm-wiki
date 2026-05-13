@@ -44,6 +44,12 @@ Master catalog of all wiki pages. Every page in the wiki must have an entry here
 |------|-------|-------------|---------|
 | <!-- entries added by LLM during /wiki-present --> | | | |
 
+## Books
+
+| Page | Title | Pages | OCR | Created |
+|------|-------|-------|-----|---------|
+| <!-- entries added by LLM during /pdf-to-mdbook --> | | | | |
+
 ## Statistics
 
 - **Total pages**: 0
@@ -53,6 +59,7 @@ Master catalog of all wiki pages. Every page in the wiki must have an entry here
 - **Syntheses**: 0
 - **Flashcard files**: 0
 - **Presentations**: 0
+- **Books**: 0
 - **Sources ingested**: 0
 - **High confidence**: 0
 - **Medium confidence**: 0

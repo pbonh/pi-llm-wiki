@@ -68,6 +68,24 @@ Run the Presentation workflow to produce a Marp slide deck on a topic:
 
 If the wiki can't support a coherent deck on the topic, say so and suggest sources — do not invent claims.
 
+### `pdfbook <path>`
+
+Run the PDF → mdBook workflow on a PDF (typically under `raw/`, but any path is fine). Produces a runnable mdBook under `wiki/books/<slug>/` plus a paired wiki summary page.
+
+1. Verify required tooling is on PATH: `pdfinfo`, `pdftotext`, `pdftoppm`, `pdfimages`, `ocrmypdf`, `tesseract`, `mdbook`, and `python3` with `pypdf`. Fail fast with an install hint (`brew install poppler ocrmypdf tesseract mdbook`) if anything is missing.
+2. Sample text from the first few pages; if sparse, run `ocrmypdf --skip-text --output-type pdf --rotate-pages --deskew` automatically (no confirmation, even on long books).
+3. Extract *reference* text with `pdftotext -layout` and `pdftotext` (flow), and raster images with `pdfimages -all`. The text files are advisory only — chapter content is reconstructed from page images in step 5.
+4. Recover structure — critical step #1:
+   - Try the embedded PDF outline via `pypdf`. Reject it if empty or if entries look like filenames (`00.pdf`, `chapter01.pdf`).
+   - Otherwise render representative pages with `pdftoppm -png` and use vision capabilities to read the ToC and chapter openings, producing a grounded `{depth, title, start_page, end_page}` list. Cross-check each `start_page` against the recovered title before committing.
+5. Reconstruct chapter content via vision-per-page — critical step #2. Render every page in each chapter (`pdftoppm -png -r 150`; 200 DPI for math/figure-heavy pages, 100 DPI for plain prose on very long books) and read them in 3–5-page batches. Produce markdown matching the printed page in reading order: honour columns, drop running headers/footers/page numbers and in-figure labels, preserve math as `$...$`/`$$...$$`, code as fenced blocks, tables as GFM, figures referenced from `src/images/` with captions quoted from the page. Stitch sentences across page breaks; cross-check long identifiers and URLs against the reference text from step 3. For vector figures, **crop just the figure region** using `pdftoppm -x -y -W -H` (pixel coords at the rendering DPI); never embed full-page renders. Verify each crop visually and tighten or widen the bounding box if body text bleeds in or the caption is clipped.
+6. Write `book.toml` (mathjax enabled), `src/SUMMARY.md` in strict mdBook syntax, and one `# Chapter` markdown file per chapter under `src/`.
+7. Run `mdbook build wiki/books/<slug>/`. A non-zero exit is a hard stop — fix and rebuild.
+8. Write `wiki/summaries/<slug>.md` (`## Key Points`, `## Relevant Concepts`, `## Source Metadata`, `## Book`) linking to the rendered book.
+9. Update `wiki/index.md` (`## Books` table) and append `wiki/log.md`.
+
+Never invent chapters or content. Re-runs overwrite chapter files in place rather than duplicating. Prefer `marker` or `docling` if installed for higher-fidelity extraction, but never add them as deps.
+
 ### `new <domain>`
 
 Bootstrap an llm-wiki in the current directory for `<domain>`. Works in either an empty directory (drops the bundled template first) or an existing llm-wiki clone (customizes in place).

@@ -2,7 +2,7 @@
 
 [pi coding agent](https://pi.dev/docs/latest) integration for the [llm-wiki](https://github.com/pbonh/llm-wiki) template.
 
-Adds four slash commands and one skill to pi, plus a standalone init binary. **The template is bundled** — you do not need to clone `llm-wiki` separately. `npm install -g pi-llm-wiki`, run `pi` in any directory (empty or existing), and `/wiki-new` will scaffold and customize a wiki for you.
+Adds seven slash commands and one skill to pi, plus a standalone init binary. **The template is bundled** — you do not need to clone `llm-wiki` separately. `npm install -g pi-llm-wiki`, run `pi` in any directory (empty or existing), and `/wiki-new` will scaffold and customize a wiki for you.
 
 ## Install
 
@@ -47,6 +47,7 @@ Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-w
 | `/wiki-lint` | Audit the wiki for orphans, contradictions, missing links, and incomplete sections. Fixes what it can and reports the rest. |
 | `/wiki-flashcards <page>` | Generate obsidian-spaced-repetition cards from a wiki page into `wiki/flashcards/<slug>.md`. Uses basic, reversed, and cloze formats. |
 | `/wiki-present <topic>` | Generate a Marp slide deck on a topic from relevant wiki content into `wiki/presentations/<slug>.md`. References every cited page. |
+| `/pdf-to-mdbook <path>` | Convert any PDF (scanned, structured, textbook, or research paper) into a runnable [mdBook](https://rust-lang.github.io/mdBook/) under `wiki/books/<slug>/`. Auto-OCRs scanned PDFs, uses the embedded outline when present and vision-based structure recovery otherwise, builds with `mdbook build`, and writes a paired summary page. Requires `poppler`, `ocrmypdf`, `tesseract`, `mdbook`, and `python3` with `pypdf` on PATH. |
 
 ### Skill (alternative entry point)
 
@@ -57,6 +58,7 @@ Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-w
 /skill:wiki-maintainer lint
 /skill:wiki-maintainer flashcards <page>
 /skill:wiki-maintainer present <topic>
+/skill:wiki-maintainer pdfbook <path>
 ```
 
 ### Binary (no pi required)
