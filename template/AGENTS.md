@@ -233,34 +233,47 @@ Steps:
       (Run it as a heredoc or short script — the example is schematic.) Reject the outline if it is empty, if titles look like filenames (e.g. `00.pdf`, `chapter01.pdf`), or if the depth-1 entries clearly do not correspond to chapters.
    2. **Vision-based structure extraction** when the outline is missing or unreliable. Render representative pages with `pdftoppm -png -r 150 <work>/source.pdf <work>/pages/p` and read those PNGs as images. Cover at minimum: the table of contents pages (when present), the first page of every plausible chapter (detect by skimming page thumbnails at lower DPI like `-r 75` first to find chapter-opening pages), and any pages whose text extraction looks scrambled. The expectation is that the vision pass produces a structured list of `{depth, title, start_page, end_page}` entries grounded in what is actually on the page images — not invented.
    3. Cross-check: every chapter's `start_page` must contain text matching the proposed title; if it does not, re-examine the image and correct the entry before continuing.
+   4. **Image-limit safeguard.** Most vision APIs cap images per conversation at ~30. For books longer than ~25 pages you cannot read every page as an image in one turn. For long books, switch to the **hybrid reconstruction** strategy described in step 7b instead of pure vision-per-page.
 
-7. **Assemble chapter files via vision-per-page reconstruction.** This is the second critical step — spend tokens generously. The pipeline is vision-first: render every page as an image and have the agent read each rendered page to produce the chapter's markdown. `pdftotext` output is consulted only as a cross-check for tricky identifiers, citations, and long URLs.
+7. **Assemble chapter files.** Choose the reconstruction strategy based on page count and source quality.
 
-   For each chapter in the recovered structure:
+   **Strategy A — Pure vision-per-page (recommended for ≤ ~25 pages).**
+   Render every page as an image and have the agent read each rendered page to produce the chapter's markdown. `pdftotext` output is consulted only as a cross-check for tricky identifiers, citations, and long URLs.
+   - Render the chapter's page range at 150 DPI (200 DPI for math-heavy or figure-heavy pages):
+     ```bash
+     pdftoppm -png -r 150 -f <start> -l <end> <work>/source.pdf <work>/ch<NN>/p
+     ```
+   - Read the rendered PNGs in order (in batches of 3–5 pages per read when the chapter is long). For each page, produce clean markdown that reflects what is actually on the page — nothing more, nothing less:
+     - Honour the visual reading order (top-to-bottom within each column for two-column layouts; reconstruct the prose column-by-column, not interleaved).
+     - Drop running headers, running footers, page numbers, and copyright/permissions notices.
+     - Drop in-figure labels and arrows; do not splice them into surrounding prose.
+     - Preserve math as inline TeX (`$...$`) or display TeX (`$$...$$`). Do not approximate equations as ASCII; if a symbol is genuinely unreadable, mark it `$\text{?}$` and note it in the log entry instead of guessing.
+     - Preserve code listings as fenced blocks. Use a language hint when the language is clear; fall back to plain fences otherwise.
+     - Preserve tables as GitHub-flavoured markdown when feasible; fall back to fenced plain-text for tables that do not survive the conversion.
+     - Preserve citation markers in their original form.
+     - Stitch sentences across page boundaries: undo end-of-line hyphenation, merge paragraphs that continue from one page to the next, and do not introduce a paragraph break where the source had none.
+   - Figures: for raster figures already extracted (step 5), reference them at the position they appeared. For vector figures, **crop just the figure region** with `pdftoppm -x -y -W -H` (pixel coords at the rendering DPI; a US Letter page at 150 DPI is 1275×1650). Determine the bounding box by reading the rendered page image and estimating the four bounds (figure + caption, excluding headers, body prose, adjacent figures). Verify the crop visually; tighten if body text bleeds in, widen if the caption or right edge is clipped. Rename the output to a stable filename (`pdftoppm` appends a page-number suffix like `-08.png`).
+   - Cross-check identifiers, long URLs, DOIs, ISBNs, and citation keys against the corresponding region in `text-layout.txt`/`text-flow.txt`; vision OCR can miss a digit or a hyphen in long alphanumeric strings.
+   - Start each chapter file with `# <Chapter Title>` matching `SUMMARY.md` exactly. Sub-sections become `##`/`###` honouring the printed hierarchy.
 
-   1. Render the chapter's page range at 150 DPI (200 DPI for math-heavy or figure-heavy textbook pages, 100 DPI for plain prose on very long books to save tokens):
-      ```bash
-      pdftoppm -png -r 150 -f <start> -l <end> <work>/source.pdf <work>/ch<NN>/p
-      ```
-   2. Read the rendered PNGs in order (in batches of 3–5 pages per read when the chapter is long). For each page, produce clean markdown that reflects what is actually on the page — nothing more, nothing less:
-      - Honour the visual reading order (top-to-bottom within each column for two-column layouts; reconstruct the prose column-by-column, not interleaved).
-      - Drop running headers, running footers, page numbers, and the copyright/permissions notices that journals stamp on the first page.
-      - Drop in-figure labels and arrows; do not splice them into the surrounding prose.
-      - Preserve math as inline TeX (`$...$`) or display TeX (`$$...$$`). Do not approximate equations as ASCII; if a symbol is genuinely unreadable, mark it `$\text{?}$` and note it in the log entry instead of guessing.
-      - Preserve code listings as fenced blocks. Use a language hint when the language is clear (` ```python `, ` ```c `, ` ```verilog `); fall back to plain fences otherwise.
-      - Preserve tables as GitHub-flavoured markdown when feasible; fall back to fenced plain-text for tables that do not survive the conversion.
-      - Preserve citation markers in their original form (e.g. `[12]`, `(Smith, 2021)`).
-      - Stitch sentences across page boundaries: undo end-of-line hyphenation, merge paragraphs that continue from one page to the next, and do not introduce a paragraph break where the source had none.
-   3. Figures:
-      - For raster figures already extracted to `wiki/books/<slug>/src/images/` (step 5), reference them at the position they appeared on the page: `![Figure N.M: <caption from the page>](images/<filename>)`.
-      - For vector figures (which `pdfimages` does not extract — common in research papers and modern textbooks), **crop just the figure region**, not the whole page. Use `pdftoppm`'s built-in cropping: `pdftoppm -png -r 150 -f <page> -l <page> -x <X> -y <Y> -W <width> -H <height> <source.pdf> <out-prefix>`. Coordinates are in pixels at the rendering DPI; a US Letter page at 150 DPI is 1275×1650. Determine the bounding box for each figure by reading the rendered page image at 150 DPI and estimating the four bounds from what you see (figure plus caption, excluding running headers, body prose, and adjacent figures). Verify the crop visually by reading the resulting PNG; tighten the box if body text bleeds in, widen it if the caption or right edge is clipped. Rename the output to a stable filename (`pdftoppm` appends a page-number suffix like `-08.png`).
-      - Whole-page renders are an inferior fallback. Use them only when the figure occupies the entire page or when cropping is genuinely impractical.
-      - Never invent a figure caption — quote it from the page.
-   4. Cross-check identifiers, long URLs, DOIs, ISBNs, and citation keys against the corresponding region in `text-layout.txt`/`text-flow.txt`; vision OCR can miss a digit or a hyphen in long alphanumeric strings.
-   5. Start each chapter file with `# <Chapter Title>` matching `SUMMARY.md` exactly. Sub-sections become `##`/`###` honouring the recovered hierarchy and the printed numbering on the page.
-   6. Write to `wiki/books/<slug>/src/<NN>-<chapter-slug>.md` where `NN` is a zero-padded order index.
+   **Strategy B — Hybrid vision + `pdftotext` (required for > ~25 pages because of the ~30 image-per-conversation limit).**
+   For long books, pure vision-per-page is impossible in a single conversation. Use vision strategically and `pdftotext` for bulk prose.
+   1. **Vision sample set** (keep under 25 images total for the whole book):
+      - Render every TOC page at 150 DPI and read them.
+      - Render the first page of every chapter at 150 DPI and read them to confirm chapter titles, detect headers/footers, and note figure-heavy pages.
+      - Render any page where `pdftotext` output is garbled or where the outline/TOC indicates a figure, table, or equation block.
+   2. **Bulk prose extraction:**
+      - Run `pdftotext -layout <work>/source.pdf <work>/text-layout.txt` (or flow mode for two-column papers).
+      - Use the header/footer patterns observed in the vision samples to strip running elements from the extracted text programmatically (e.g. `grep -v` for repeated header lines, strip trailing page-number-only lines).
+      - Slice the cleaned text by chapter range using the page map from step 6.
+   3. **Stitching:**
+      - Start each chapter file with the chapter-opening page reconstructed from vision (clean `# Title`, initial paragraph).
+      - Append the sliced `pdftotext` prose for the bulk of the chapter.
+      - At any page identified as figure/table/math-heavy during the vision sample, replace the corresponding `pdftotext` region with the vision-reconstructed markdown for that page. Insert the cropped figure image at the correct position with the caption quoted from the vision read.
+      - Cross-check math, code, tables, and long identifiers from the vision sample against the `pdftotext` text; correct any OCR artefacts (e.g. `Ð` for em-dash, `ł` for left-quote) that appear in the bulk text using patterns observed on the vision samples.
+   4. **Figures:** follow the same vector-figure cropping rules as Strategy A, but only for the figure-bearing pages identified in the vision sample.
 
-   For very long chapters (e.g. a 50-page textbook chapter), process pages in fixed-size batches, append each batch to the chapter file as you go, and confirm continuity at each batch boundary by re-reading the last paragraph from the previous batch alongside the first page of the next batch.
+   For very long chapters under Strategy B (e.g. a 50-page textbook chapter), process the vision sample pages in fixed-size batches and append each batch's reconstructed markdown to the chapter file as you go, confirming continuity at each batch boundary.
 
 8. **Write `book.toml`** at `wiki/books/<slug>/book.toml`:
    ```toml
