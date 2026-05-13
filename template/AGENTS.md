@@ -236,7 +236,7 @@ Steps:
       (Run it as a heredoc or short script — the example is schematic.) Reject the outline if it is empty, if titles look like filenames (e.g. `00.pdf`, `chapter01.pdf`), or if the depth-1 entries clearly do not correspond to chapters.
    2. **Vision-based structure extraction** when the outline is missing or unreliable. Render representative pages with `pdftoppm -png -r 150 <work>/source.pdf <work>/pages/p` and read those PNGs as images. Cover at minimum: the table of contents pages (when present), the first page of every plausible chapter (detect by skimming page thumbnails at lower DPI like `-r 75` first to find chapter-opening pages), and any pages whose text extraction looks scrambled. The expectation is that the vision pass produces a structured list of `{depth, title, start_page, end_page}` entries grounded in what is actually on the page images — not invented.
    3. Cross-check: every chapter's `start_page` must contain text matching the proposed title; if it does not, re-examine the image and correct the entry before continuing.
-   4. **Image-limit safeguard.** Most vision APIs cap images per conversation at ~30. For books longer than ~25 pages you cannot read every page as an image in one turn. For long books, switch to the **hybrid reconstruction** strategy described in step 7b instead of pure vision-per-page.
+   4. **Image-limit safeguard.** Most vision APIs cap images per conversation at ~30. For books longer than ~25 pages you cannot read every page as an image in one turn — and you also cannot read every chapter-opening + figure page in one turn for a typical textbook. For long books, switch to the **`pi-subagents` worker dispatch** reconstruction strategy in step 7b: the parent caps itself at ~12 images and each chapter is reconstructed by a fresh `worker` child (`subagent` tool, `context: "fresh"`). Do not try to fit a long book into the parent conversation.
 
 7. **Assemble chapter files.** Choose the reconstruction strategy based on page count and source quality.
 
@@ -259,24 +259,41 @@ Steps:
    - Cross-check identifiers, long URLs, DOIs, ISBNs, and citation keys against the corresponding region in `text-layout.txt`/`text-flow.txt`; vision OCR can miss a digit or a hyphen in long alphanumeric strings.
    - Start each chapter file with `# <Chapter Title>` matching `SUMMARY.md` exactly. Sub-sections become `##`/`###` honouring the printed hierarchy.
 
-   **Strategy B — Hybrid vision + `pdftotext` (required for > ~25 pages because of the ~30 image-per-conversation limit).**
-   For long books, pure vision-per-page is impossible in a single conversation. Use vision strategically and `pdftotext` for bulk prose.
-   1. **Vision sample set** (keep under 25 images total for the whole book):
-      - Render every TOC page at 150 DPI and read them.
-      - Render the first page of every chapter at 150 DPI and read them to confirm chapter titles, detect headers/footers, and note figure-heavy pages.
-      - Render any page where `pdftotext` output is garbled or where the outline/TOC indicates a figure, table, or equation block.
-   2. **Bulk prose extraction:**
-      - Run `pdftotext -layout <work>/source.pdf <work>/text-layout.txt` (or flow mode for two-column papers).
-      - Use the header/footer patterns observed in the vision samples to strip running elements from the extracted text programmatically (e.g. `grep -v` for repeated header lines, strip trailing page-number-only lines).
-      - Slice the cleaned text by chapter range using the page map from step 6.
-   3. **Stitching:**
-      - Start each chapter file with the chapter-opening page reconstructed from vision (clean `# Title`, initial paragraph).
-      - Append the sliced `pdftotext` prose for the bulk of the chapter.
-      - At any page identified as figure/table/math-heavy during the vision sample, replace the corresponding `pdftotext` region with the vision-reconstructed markdown for that page. Insert the cropped figure image at the correct position with the caption quoted from the vision read.
-      - Cross-check math, code, tables, and long identifiers from the vision sample against the `pdftotext` text; correct any OCR artefacts (e.g. `Ð` for em-dash, `ł` for left-quote) that appear in the bulk text using patterns observed on the vision samples.
-   4. **Figures:** follow the same vector-figure cropping rules as Strategy A, but only for the figure-bearing pages identified in the vision sample.
+   **Strategy B — Subagent-dispatched hybrid (required for > ~25 pages because of the ~30 image-per-conversation limit).**
+   Pure vision-per-page in a single conversation is impossible for a long book — and "render every chapter opening + every figure page" also blows past the cap on most textbooks. Split the work: the parent does structure + assembly, and one subagent per chapter does prose reconstruction with a fresh image budget. **Hard rule: the parent must never render or read more than ~12 page images for the whole job.** If you approach that cap, stop and dispatch the rest.
 
-   For very long chapters under Strategy B (e.g. a 50-page textbook chapter), process the vision sample pages in fixed-size batches and append each batch's reconstructed markdown to the chapter file as you go, confirming continuity at each batch boundary.
+   1. **Structure pass in the parent (≤12 images, hard cap):**
+      - Try the pypdf outline first (step 6.1).
+      - If the outline is unusable, render only TOC pages plus 2–3 sample chapter-opening pages for cross-check. Read them, then stop rendering in the parent.
+      - Commit the recovered structure to `<work>/chapters.json` as a list of `{index, title, start_page, end_page}` entries. Both `SUMMARY.md` and the subagent dispatch in step 3 come from this file.
+   2. **Bulk prose extraction (no vision):**
+      - Run `pdftotext -layout <work>/source.pdf <work>/text-layout.txt` (or flow mode for two-column papers).
+      - Use header/footer patterns observed in the structure pass to strip running elements (e.g. `grep -v` for repeated header lines, drop trailing page-number-only lines).
+      - Slice the cleaned text by chapter range into `<work>/text/ch-<NN>.txt` using the page map.
+   3. **Per-chapter `worker` dispatch via the `subagent` tool (`pi-subagents`).** This is the actual workaround for the image limit — each chapter is reconstructed by a fresh `worker` child whose conversation starts empty and gets its own ~30-image budget. For each chapter in `chapters.json`, call the `subagent` tool with the builtin `worker` agent. **You MUST pass `context: "fresh"` explicitly:** `worker` defaults to `context: "fork"` (forked from the parent session), which would inherit the parent's images and defeat the entire point. Dispatch independent chapters in a single `tasks: [...]` call so they run in parallel (pi-subagents default `concurrency: 4`, `maxTasks: 8` per call — for books with > 8 chapters, send multiple `subagent` calls of ≤8 tasks each, or raise `parallel.maxTasks` in `~/.pi/agent/extensions/subagent/config.json`).
+
+      Call shape:
+      ```ts
+      subagent({
+        tasks: [
+          { agent: "worker", task: "<chapter 1 self-contained prompt>" },
+          { agent: "worker", task: "<chapter 2 self-contained prompt>" },
+          ...
+        ],
+        context: "fresh"
+      })
+      ```
+
+      Each `task` string must be a self-contained prompt (the worker starts fresh and inherits `AGENTS.md`/`CLAUDE.md`, but no other parent context). Include:
+      - PDF path, slug, chapter index, title, `start_page`, `end_page`.
+      - Path to the chapter's `pdftotext` slice (`<work>/text/ch-<NN>.txt`).
+      - Path to the `pdfimages` output dir and the figure→page manifest.
+      - Target chapter-file path (`wiki/books/<slug>/src/<NN>-<chapter-slug>.md`) and the exact required first line (`# <Chapter Title>` matching `SUMMARY.md`).
+      - **Hard rule for the worker:** render and read at most ~20 page images. Spend that budget on (a) the chapter opening, (b) any page identified as figure/table/equation/math-heavy from the slice, and (c) any page where the slice is garbled. Do not render every page of the chapter.
+      - Stitching: start the chapter file with the vision-reconstructed opening page, append the bulk slice prose, swap in vision-reconstructed markdown for figure/table/math-heavy pages, cross-check math/code/tables/long identifiers between vision and bulk text, correct OCR artefacts (`Ð`→em-dash, `ł`→left-quote, etc.) using patterns observed in the vision reads.
+      - The worker writes the chapter file directly with `Write`/`Edit` and returns a short status message (pages rendered, figures inserted, unresolved issues). It must not write `SUMMARY.md`, `book.toml`, or touch other chapters.
+   4. **Re-dispatch on worker failure.** If a worker reports it hit its own image cap or could not complete the chapter, re-dispatch that one chapter with a narrower page range (split the chapter in half into two tasks) rather than retrying in the parent.
+   5. **Figures:** follow the same vector-figure cropping rules as Strategy A. Under Strategy B, cropping happens inside the subagent that owns the figure's chapter.
 
 8. **Write `book.toml`** at `wiki/books/<slug>/book.toml`:
    ```toml
