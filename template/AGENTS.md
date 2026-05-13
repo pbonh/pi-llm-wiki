@@ -90,7 +90,7 @@ confidence: high | medium | low
 - Required files: `book.toml` (mdBook config), `src/SUMMARY.md` (chapter list), one markdown file per chapter under `src/`, optional `src/images/` for figures.
 - `src/SUMMARY.md` follows mdBook syntax strictly: chapters as `- [Title](path.md)`, two-space indent for sub-chapters, `# Part Title` for parts, `---` on its own line for separators. mdBook will refuse to build if this file is malformed.
 - Each chapter file starts with a single `# Chapter Title` H1 matching its `SUMMARY.md` entry; sub-sections use `##`/`###`.
-- The book is paired with a `wiki/summaries/<slug>.md` page that lives in the regular wiki schema (so the book is discoverable from `wiki/index.md` and linked into concepts/entities).
+- Discoverability comes from the `## Books` row in `wiki/index.md`, which links directly to `[[books/<slug>/src/SUMMARY|<Title>]]`. The PDF → mdBook workflow does **not** produce a paired `wiki/summaries/<slug>.md`; if a summary or concept extraction is wanted, the user invokes the Ingest workflow separately on the source PDF or the rendered book.
 
 ## Linking Conventions
 
@@ -131,9 +131,10 @@ When the user says "ingest [source]" or adds a file to `raw/`:
 3. Identify all concepts, entities, and strategies mentioned
 4. For each concept/entity: create the page if it doesn't exist, or update it with new information if it does
 5. Add cross-links in both directions between all touched pages
-6. Update `wiki/index.md` — add new entries, update summaries of changed pages
-7. Append to `wiki/log.md` with timestamp, source name, pages created/updated
-8. Flag any contradictions with existing wiki content
+6. **Verify zero dangling links — acceptance gate.** Before declaring the ingest complete, scan every page you created or updated and list every `[[...]]` reference. For each link, confirm the target file exists on disk. For each dangling link, either (a) create the missing page now with the full schema for its type (a stub with frontmatter + required sections is fine if the source only mentions the concept in passing — set `confidence: low` and note the source mention), or (b) remove the link from the citing page when the source genuinely does not support a standalone page. Re-run the scan until it returns zero dangling links. A summary that cites pages which do not exist is a workflow failure, not a partial success. Every `[[wiki-link]]` you write must resolve to a real file by the end of the run.
+7. Update `wiki/index.md` — add new entries, update summaries of changed pages
+8. Append to `wiki/log.md` with timestamp, source name, pages created/updated
+9. Flag any contradictions with existing wiki content
 
 ### Query
 
@@ -198,6 +199,8 @@ If the wiki lacks enough material to build a coherent deck on the requested topi
 When the user says "pdfbook [path]" or runs `/pdf-to-mdbook <path>` — argument is a path to a PDF, typically under `raw/` but any readable path is allowed.
 
 The goal is to convert a single PDF (scanned, structured, textbook, or research paper) into a faithful, runnable mdBook under `wiki/books/<slug>/`. The chapter/section hierarchy must match the real source. **Do not invent chapters or content the PDF does not contain.**
+
+**Scope: conversion only.** This workflow does NOT ingest the book's content into the wiki graph. It does not write `wiki/summaries/<slug>.md`, does not create concept or entity pages, and does not produce `Relevant Concepts` cross-links. Its only wiki-graph touchpoints are a row in the `## Books` table of `wiki/index.md` and a `wiki/log.md` entry — both of which merely record that the book exists. If the user wants the book ingested into the knowledge graph (concepts extracted, entities cross-linked, syntheses drawn), they will invoke the Ingest workflow separately afterwards on the source PDF or the rendered book. Treat conversion and ingestion as independent — running PDF → mdBook never implies running Ingest.
 
 **Required tooling on PATH** (fail fast with `brew install poppler ocrmypdf tesseract mdbook` if any are missing):
 
@@ -290,15 +293,11 @@ Steps:
 
 10. **Validate the build.** Run `mdbook build wiki/books/<slug>/`. If it fails, fix `SUMMARY.md` or chapter files until it succeeds. A successful build is part of the acceptance bar.
 
-11. **Write the paired wiki summary page** at `wiki/summaries/<slug>.md` with the standard summary frontmatter and these sections:
-    - `## Key Points` — 5–10 bullets covering the book's main claims/ideas.
-    - `## Relevant Concepts` — wiki links to concept/entity pages this book touches. Create those pages opportunistically (same rules as `/wiki-ingest`) for the most important concepts; do not try to ingest the entire book into the wiki schema — the mdBook itself is the long-form artifact.
-    - `## Source Metadata` — title, authors, page count, source path, OCR'd? yes/no, structure recovery method (outline / vision / mixed).
-    - `## Book` — a single line linking to the rendered book: `See [[books/<slug>/src/SUMMARY|the full mdBook]]` plus the on-disk path `wiki/books/<slug>/`.
+11. **Update `wiki/index.md`.** Add an entry under the `## Books` table (create the table if missing). Columns: `Page | Title | Pages | OCR | Created`. The `Page` cell links directly to the rendered book — `[[books/<slug>/src/SUMMARY|<Title>]]`. Do **not** link to a `summaries/<slug>` page; this workflow does not create one.
 
-12. **Update `wiki/index.md`.** Add an entry under the `## Books` table (create the table if missing). Columns: `Page | Title | Pages | OCR | Created`.
+12. **Append `wiki/log.md`** with a dated entry recording the PDF path, slug, total chapters, page count, OCR status, structure-recovery method, and `mdbook build` result.
 
-13. **Append `wiki/log.md`** with a dated entry recording the PDF path, slug, total chapters, page count, OCR status, structure-recovery method, and `mdbook build` result.
+Do **not** create `wiki/summaries/<slug>.md`. Do **not** create concept or entity pages. Do **not** produce `## Relevant Concepts` links from the book's content. Those are the Ingest workflow's responsibilities; the user invokes that separately if desired.
 
 Quality bar (acceptance):
 - `mdbook build wiki/books/<slug>/` exits 0.
@@ -307,6 +306,7 @@ Quality bar (acceptance):
 - Chapter prose matches the printed page in reading order; no column interleaving, no in-figure labels spliced into the prose, no copyright/permissions notices bleeding into chapter 1.
 - Math preserved as TeX, code as fenced blocks with a language hint where possible, tables as GFM where feasible, figures present where they appear in the source with captions quoted from the page.
 - Front matter (preface, TOC, copyright) is either included as `[Front Matter](00-front-matter.md)` style entries before the first numbered part, or omitted deliberately and noted in the log.
+- No `wiki/summaries/<slug>.md` was written, no concept/entity pages were created, and the only `wiki/` touchpoints outside `wiki/books/<slug>/` are the `Books` table row in `index.md` and the dated `log.md` entry.
 
 ## Rules
 

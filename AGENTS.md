@@ -30,7 +30,7 @@ Then inside pi:
 
 7. `/wiki-present <topic>` — the agent stitches relevant wiki pages into a Marp slide deck at `wiki/presentations/<slug>.md`.
 
-8. `/pdf-to-mdbook <path>` — the agent converts a PDF (scanned, structured, textbook, or paper) into a runnable [mdBook](https://rust-lang.github.io/mdBook/) under `wiki/books/<slug>/`. Auto-OCRs scanned PDFs, prefers the embedded outline and falls back to vision-based structure recovery, validates with `mdbook build`, and writes a paired `wiki/summaries/<slug>.md`. Requires `poppler`, `ocrmypdf`, `tesseract`, `mdbook`, and `python3`+`pypdf` on PATH.
+8. `/pdf-to-mdbook <path>` — the agent converts a PDF (scanned, structured, textbook, or paper) into a runnable [mdBook](https://rust-lang.github.io/mdBook/) under `wiki/books/<slug>/`. Auto-OCRs scanned PDFs, prefers the embedded outline and falls back to vision-based structure recovery, validates with `mdbook build`, and records the book in `wiki/index.md` + `wiki/log.md`. **Conversion only** — does not create concept/entity/summary pages or ingest the book's content into the wiki graph; run `/wiki-ingest` separately if that's what you want. Requires `poppler`, `ocrmypdf`, `tesseract`, `mdbook`, and `python3`+`pypdf` on PATH.
 
 `AGENTS.md` (the one inside the user's wiki, copied from `template/AGENTS.md`) is the source of truth for page format and all five workflows. The slash commands and skill in this package delegate to it rather than restating the rules.
 

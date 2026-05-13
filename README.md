@@ -47,7 +47,7 @@ Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-w
 | `/wiki-lint` | Audit the wiki for orphans, contradictions, missing links, and incomplete sections. Fixes what it can and reports the rest. |
 | `/wiki-flashcards <page>` | Generate obsidian-spaced-repetition cards from a wiki page into `wiki/flashcards/<slug>.md`. Uses basic, reversed, and cloze formats. |
 | `/wiki-present <topic>` | Generate a Marp slide deck on a topic from relevant wiki content into `wiki/presentations/<slug>.md`. References every cited page. |
-| `/pdf-to-mdbook <path>` | Convert any PDF (scanned, structured, textbook, or research paper) into a runnable [mdBook](https://rust-lang.github.io/mdBook/) under `wiki/books/<slug>/`. Auto-OCRs scanned PDFs, uses the embedded outline when present and vision-based structure recovery otherwise, builds with `mdbook build`, and writes a paired summary page. Requires `poppler`, `ocrmypdf`, `tesseract`, `mdbook`, and `python3` with `pypdf` on PATH. |
+| `/pdf-to-mdbook <path>` | Convert any PDF (scanned, structured, textbook, or research paper) into a runnable [mdBook](https://rust-lang.github.io/mdBook/) under `wiki/books/<slug>/`. Auto-OCRs scanned PDFs, uses the embedded outline when present and vision-based structure recovery otherwise, builds with `mdbook build`, and records the book in `wiki/index.md` + `wiki/log.md`. **Conversion only** — does not write a summary page, concept pages, or any `Relevant Concepts` cross-links. Run `/wiki-ingest` afterwards if you want the book's content ingested into the wiki graph. Requires `poppler`, `ocrmypdf`, `tesseract`, `mdbook`, and `python3` with `pypdf` on PATH. |
 
 ### Skill (alternative entry point)
 

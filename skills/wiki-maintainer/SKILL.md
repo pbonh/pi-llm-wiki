@@ -19,10 +19,11 @@ Run the Ingest workflow on `<path>` (a file in `raw/`).
 2. Create `wiki/summaries/<source-slug>.md`.
 3. Create/update every concept, entity, and strategy page mentioned.
 4. Add bidirectional `[[wiki/...]]` cross-links.
-5. Update `wiki/index.md` and append to `wiki/log.md`.
-6. Flag contradictions with existing pages.
+5. **Verify zero dangling links — acceptance gate.** Scan every page you created or updated for `[[...]]` references and confirm each target file exists on disk. For each dangling link, either create the missing page (full schema, stub content OK if the source mentions the concept only in passing — set `confidence: low`) or remove the link. Re-scan until zero dangling links remain. A summary that cites pages which don't exist is a workflow failure.
+6. Update `wiki/index.md` and append to `wiki/log.md`.
+7. Flag contradictions with existing pages.
 
-Never modify files in `raw/`. Prefer updating existing pages over duplicating.
+Never modify files in `raw/`. Prefer updating existing pages over duplicating. Every `[[wiki-link]]` must resolve to a real file by the end of the run.
 
 ### `query <question>`
 
@@ -70,7 +71,9 @@ If the wiki can't support a coherent deck on the topic, say so and suggest sourc
 
 ### `pdfbook <path>`
 
-Run the PDF → mdBook workflow on a PDF (typically under `raw/`, but any path is fine). Produces a runnable mdBook under `wiki/books/<slug>/` plus a paired wiki summary page.
+Run the PDF → mdBook workflow on a PDF (typically under `raw/`, but any path is fine). Produces a runnable mdBook under `wiki/books/<slug>/`.
+
+**Scope: this is conversion only.** Do NOT create `wiki/summaries/<slug>.md`, concept pages, entity pages, or `Relevant Concepts` cross-links. If the user wants the book's content ingested into the wiki graph, they will invoke `ingest` separately. Treat conversion and ingestion as independent workflows.
 
 1. Verify required tooling is on PATH: `pdfinfo`, `pdftotext`, `pdftoppm`, `pdfimages`, `ocrmypdf`, `tesseract`, `mdbook`, and `python3` with `pypdf`. Fail fast with an install hint (`brew install poppler ocrmypdf tesseract mdbook`) if anything is missing.
 2. Sample text from the first few pages; if sparse, run `ocrmypdf --skip-text --output-type pdf --rotate-pages --deskew` automatically (no confirmation, even on long books).
@@ -81,8 +84,7 @@ Run the PDF → mdBook workflow on a PDF (typically under `raw/`, but any path i
 5. Reconstruct chapter content via vision-per-page — critical step #2. Render every page in each chapter (`pdftoppm -png -r 150`; 200 DPI for math/figure-heavy pages, 100 DPI for plain prose on very long books) and read them in 3–5-page batches. Produce markdown matching the printed page in reading order: honour columns, drop running headers/footers/page numbers and in-figure labels, preserve math as `$...$`/`$$...$$`, code as fenced blocks, tables as GFM, figures referenced from `src/images/` with captions quoted from the page. Stitch sentences across page breaks; cross-check long identifiers and URLs against the reference text from step 3. For vector figures, **crop just the figure region** using `pdftoppm -x -y -W -H` (pixel coords at the rendering DPI); never embed full-page renders. Verify each crop visually and tighten or widen the bounding box if body text bleeds in or the caption is clipped.
 6. Write `book.toml` (mathjax enabled), `src/SUMMARY.md` in strict mdBook syntax, and one `# Chapter` markdown file per chapter under `src/`.
 7. Run `mdbook build wiki/books/<slug>/`. A non-zero exit is a hard stop — fix and rebuild.
-8. Write `wiki/summaries/<slug>.md` (`## Key Points`, `## Relevant Concepts`, `## Source Metadata`, `## Book`) linking to the rendered book.
-9. Update `wiki/index.md` (`## Books` table) and append `wiki/log.md`.
+8. Update `wiki/index.md` `## Books` table with a row whose `Page` cell links directly to the rendered book (`[[books/<slug>/src/SUMMARY|<Title>]]`) — do not link to a summary page; this workflow does not create one. Append a dated `wiki/log.md` entry.
 
 Never invent chapters or content. Re-runs overwrite chapter files in place rather than duplicating. Prefer `marker` or `docling` if installed for higher-fidelity extraction, but never add them as deps.
 
