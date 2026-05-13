@@ -7,7 +7,10 @@ Bootstrap an llm-wiki in the current directory for the domain: "$@"
 Step 1 — ensure the template exists.
 
 - Check whether `AGENTS.md` exists in the current directory.
-- If it does NOT exist, run `!pi-llm-wiki-init` to drop the bundled llm-wiki template (AGENTS.md, CLAUDE.md stub, raw/, wiki/ skeleton, .gitignore) into the current directory. This command ships with `pi-llm-wiki` and copies its bundled `template/` into the cwd; no network or clone required.
+- If it does NOT exist, drop the bundled llm-wiki template (AGENTS.md, CLAUDE.md stub, raw/, wiki/ skeleton, .gitignore) into the current directory by running, in order of preference:
+  1. `!node ~/.pi/agent/git/pi-llm-wiki/bin/init.js` — pi clones this package there when the slash command is loaded, so this path is the canonical default.
+  2. `!pi-llm-wiki-init` — only if the package was also installed globally via `npm install -g pi-llm-wiki`.
+  If neither works, stop and ask the user to reinstall `pi-llm-wiki` through pi. Do NOT search the filesystem (`find`, `locate`, etc.) for the template directory — that's slow, noisy, and unnecessary.
 - If `AGENTS.md` does exist, proceed without running the init — the directory is already an llm-wiki, and we're customizing it in place.
 
 Step 2 — customize via the `<!--` marker workflow.
