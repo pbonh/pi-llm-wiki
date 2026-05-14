@@ -6,6 +6,13 @@ Adds thirteen slash commands and one skill to pi, plus a standalone init binary.
 
 Beyond the basics (ingest / query / lint / flashcards / presentations / Gherkin specs / PDF→mdBook), pi-llm-wiki ships a full **research-and-development pipeline**: strategic design (vision + bounded contexts + context map), Architectural Decision Records, and round-trip task emission onto a [Hermes Kanban](https://github.com/NousResearch/hermes) board with structured-handoff ingest and ADR-driven refinement loops.
 
+## Documentation
+
+- **[docs/](./docs/)** — long-form documentation hub.
+- **[docs/tutorial-knowledge-graph.md](./docs/tutorial-knowledge-graph.md)** — basic tutorial: bootstrap a wiki and run the ingest / query / lint loop. The "research / knowledge graph only" path. No Hermes, no ADRs.
+- **[docs/tutorial-rd-pipeline.md](./docs/tutorial-rd-pipeline.md)** — full pipeline walkthrough: strategy → ADR → spec → kanban emit → ingest → refine, end-to-end against a worked example.
+- **[docs/rd-pipeline/](./docs/rd-pipeline/)** — per-feature reference pages for each R&D slash command (inputs, outputs, gates, idempotency rules, failure modes).
+
 ## Install
 
 ```bash
