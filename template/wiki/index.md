@@ -44,6 +44,12 @@ Master catalog of all wiki pages. Every page in the wiki must have an entry here
 |------|-------|-------------|---------|
 | <!-- entries added by LLM during /wiki-present --> | | | |
 
+## Specs
+
+| Page | Goal | Scenarios | Created |
+|------|------|-----------|---------|
+| <!-- entries added by LLM during /wiki-spec --> | | | |
+
 ## Books
 
 | Page | Title | Pages | OCR | Created |
@@ -59,6 +65,7 @@ Master catalog of all wiki pages. Every page in the wiki must have an entry here
 - **Syntheses**: 0
 - **Flashcard files**: 0
 - **Presentations**: 0
+- **Specs**: 0
 - **Books**: 0
 - **Sources ingested**: 0
 - **High confidence**: 0

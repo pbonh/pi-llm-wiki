@@ -16,6 +16,7 @@ This is an LLM-maintained knowledge base on [YOUR TOPIC]. The LLM writes and mai
 - `wiki/concepts/` — Concept, strategy, and framework pages.
 - `wiki/entities/` — Entity pages (people, tools, organizations, products — whatever "things" exist in your domain).
 - `wiki/syntheses/` — Comparison tables, decision frameworks, cross-cutting analyses.
+- `wiki/specs/` — Gherkin spec artifacts synthesized from user goals (one `.feature`-style page per spec). Populated by the Spec workflow.
 - `wiki/journal/` — Research or session journal entries.
 - `wiki/flashcards/` — One flashcard file per source wiki page, formatted for the [obsidian-spaced-repetition](https://github.com/st3v3nmw/obsidian-spaced-repetition) plugin. Populated by the Flashcards workflow.
 - `wiki/presentations/` — Marp slide decks synthesized from wiki content. Populated by the Presentation workflow.
@@ -34,7 +35,7 @@ Every wiki page uses this frontmatter and structure:
 ```yaml
 ---
 title: "Page Title"
-type: concept | entity | summary | synthesis | flashcards | presentation
+type: concept | entity | summary | synthesis | spec | flashcards | presentation
 tags: [tag1, tag2, tag3]
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
@@ -70,6 +71,18 @@ confidence: high | medium | low
 - `## Analysis` — Cross-cutting insights
 - `## Recommendations` — When to prefer which approach
 - `## Pages Compared` — Links to all pages involved
+
+**Spec pages** (`wiki/specs/`):
+- `## Goal` — One-paragraph restatement of the user's intent
+- `## Scope` — *Conditional, emitted only when the goal needed impact-mapping.* Table of `Actor | Impact | Deliverable` rows
+- `## User Stories` — One block per story: `**Story:** As a <actor>, I want <capability>, so that <outcome>.` followed by `**Acceptance criteria:**` as a bulleted list of binary pass/fail statements
+- `## Scenarios` — Gherkin feature(s) inside ` ```gherkin ` fenced code blocks. Quality rules:
+  - Business-readable: never reference UI buttons, database tables, or CSS selectors. Steps describe outcomes ("the invoice is marked paid"), not interactions ("she clicks the Pay button")
+  - Single `When` per scenario — keep behaviors decoupled
+  - Realistic data: named personas and concrete numbers, not generic placeholders
+  - Use `Scenario Outline` + `Examples` tables when multiple cases share the same structure
+- `## Glossary` — `Term — definition` lines for the ubiquitous-language terms used in the scenarios; link any term that already exists as `concepts/<term>`
+- `## Sources` — Wiki links to every concept or entity page cited in the scenarios or glossary
 
 **Flashcard pages** (`wiki/flashcards/`):
 - `tags:` frontmatter must include `flashcards` — the obsidian-spaced-repetition plugin uses this tag to discover cards
@@ -193,6 +206,25 @@ When the user says "present [topic]" or "presentation [topic]" — argument is a
 6. Append a dated entry to `wiki/log.md` recording the topic, deck path, and pages cited
 
 If the wiki lacks enough material to build a coherent deck on the requested topic, say so and suggest sources that would fill the gap — do not invent claims. The Presentation workflow does **not** create a synthesis page; it only produces the deck.
+
+### Spec
+
+When the user says "spec [goal]" or runs `/wiki-spec <goal>` — argument is a user goal, feature request, or capability description in plain English.
+
+The Spec workflow runs an automated specification-by-example workshop against the wiki's existing knowledge: it consumes domain concepts the same way Query does, but emits formal Gherkin scenarios + acceptance criteria + a ubiquitous-language glossary rather than prose. Output is a single `wiki/specs/<slug>.md` page; the Gherkin lives inside ` ```gherkin ` fenced blocks within that page (copy-paste into a target repo's test suite as needed).
+
+1. Read `wiki/index.md` to find concept/entity pages relevant to the goal's domain.
+2. Read those pages in full.
+3. **Vagueness check.** If the goal lacks a clear actor + outcome, emit only the `## Scope` impact map (a table of `Actor | Impact | Deliverable` rows derived from the goal) and ask the user to confirm scope before continuing. If actor + outcome are already clear, skip the impact map.
+4. Derive user stories from the (possibly scope-narrowed) goal. Each story is `As a <actor>, I want <capability>, so that <outcome>` paired with binary pass/fail acceptance criteria.
+5. Translate each acceptance criterion into Gherkin scenarios under the Spec quality rules above (business-readable, single `When`, realistic data, `Scenario Outline` for parameterized cases). Use the exact `Given/When/Then` template — no UI mechanics, no DB tables, no CSS selectors.
+6. Extract a `## Glossary` fragment recording every ubiquitous-language term that appears in the scenarios. Link terms that already exist as `concepts/<term>`; flag any new term that warrants its own concept page.
+7. Write `wiki/specs/<slug>.md` with full frontmatter (`type: spec`, tags including `spec` and `gherkin`, plus domain tags) and the required sections (`## Goal`, optional `## Scope`, `## User Stories`, `## Scenarios`, `## Glossary`, `## Sources`).
+8. **Verify zero dangling links — acceptance gate.** Same rule as Ingest: scan every `[[...]]` reference on the new spec page, confirm each target file exists, and for each dangling link either create a stub concept page (full schema, `confidence: low`, brief content grounded in how the spec uses the term) or remove the link. Re-scan until zero dangling links remain. The Spec workflow grows the concept graph the same way Ingest does.
+9. Update `wiki/index.md` — add a row under the `## Specs` table, and bump the `Specs` count under Statistics.
+10. Append a dated entry to `wiki/log.md` recording the goal, slug, story count, scenario count, and pages cited.
+
+The Spec workflow does **not** create a paired synthesis page — specs are the artifact. If the wiki lacks enough material to ground the scenarios in real domain concepts, say so and suggest sources that would fill the gap — do not invent business rules.
 
 ### PDF → mdBook
 

@@ -2,7 +2,7 @@
 
 [pi coding agent](https://pi.dev/docs/latest) integration for the [llm-wiki](https://github.com/pbonh/llm-wiki) template.
 
-Adds seven slash commands and one skill to pi, plus a standalone init binary. **The template is bundled** — you do not need to clone `llm-wiki` separately. `npm install -g pi-llm-wiki`, run `pi` in any directory (empty or existing), and `/wiki-new` will scaffold and customize a wiki for you.
+Adds eight slash commands and one skill to pi, plus a standalone init binary. **The template is bundled** — you do not need to clone `llm-wiki` separately. `npm install -g pi-llm-wiki`, run `pi` in any directory (empty or existing), and `/wiki-new` will scaffold and customize a wiki for you.
 
 ## Install
 
@@ -44,6 +44,7 @@ Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-w
 | `/wiki-new <domain>` | Bootstrap a wiki in the cwd. Drops the bundled template if `AGENTS.md` is missing, then customizes every `<!-- ... -->` block. |
 | `/wiki-ingest <path>` | Run the Ingest workflow on a file in `raw/` — generates a summary page, creates/updates concept and entity pages, adds cross-links, updates `wiki/index.md` and `wiki/log.md`. |
 | `/wiki-query <question>` | Search the wiki and synthesize an answer with `[[wiki-link]]` citations. Creates a synthesis page in `wiki/syntheses/` if the answer reveals novel insight. |
+| `/wiki-spec <goal>` | Synthesize Gherkin specs from a user goal into `wiki/specs/<slug>.md`. Runs an automated specification-by-example workshop: derives user stories + acceptance criteria, emits Gherkin scenarios in fenced blocks, and records a ubiquitous-language glossary. Same zero-dangling-links acceptance gate as `/wiki-ingest`. |
 | `/wiki-lint` | Audit the wiki for orphans, contradictions, missing links, and incomplete sections. Fixes what it can and reports the rest. |
 | `/wiki-flashcards <page>` | Generate obsidian-spaced-repetition cards from a wiki page into `wiki/flashcards/<slug>.md`. Uses basic, reversed, and cloze formats. |
 | `/wiki-present <topic>` | Generate a Marp slide deck on a topic from relevant wiki content into `wiki/presentations/<slug>.md`. References every cited page. |
@@ -55,6 +56,7 @@ Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-w
 /skill:wiki-maintainer new <domain>
 /skill:wiki-maintainer ingest <path>
 /skill:wiki-maintainer query <question>
+/skill:wiki-maintainer spec <goal>
 /skill:wiki-maintainer lint
 /skill:wiki-maintainer flashcards <page>
 /skill:wiki-maintainer present <topic>

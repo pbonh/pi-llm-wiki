@@ -1,6 +1,6 @@
 ---
 name: wiki-maintainer
-description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards and Marp presentations, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
+description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards, Marp presentations, and Gherkin specs, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
 ---
 
 # wiki-maintainer
@@ -68,6 +68,19 @@ Run the Presentation workflow to produce a Marp slide deck on a topic:
 5. Update `wiki/index.md` and append to `wiki/log.md`. No paired synthesis page.
 
 If the wiki can't support a coherent deck on the topic, say so and suggest sources — do not invent claims.
+
+### `spec <goal>`
+
+Run the Spec workflow to synthesize Gherkin scenarios from a user goal or feature request. Output is a single `wiki/specs/<slug>.md` page with Gherkin in ` ```gherkin ` fenced blocks (copy-paste into a target repo's test suite as needed). Spec is to Query what Presentation is to Synthesis — same retrieval, different artifact.
+
+1. Read `wiki/index.md` and the concept/entity pages relevant to the goal's domain.
+2. **Vagueness check.** If the goal lacks a clear actor + outcome, emit only the `## Scope` impact map (`Actor | Impact | Deliverable`) and ask the user to confirm scope before producing scenarios. Otherwise skip the impact map.
+3. Derive user stories with binary pass/fail acceptance criteria, then translate each criterion into Gherkin scenarios under the quality rules: business-readable (no UI buttons, DB tables, or CSS selectors), single `When` per scenario, realistic data (named personas + concrete numbers), `Scenario Outline` + `Examples` for parameterized cases.
+4. Write `wiki/specs/<slug>.md` with `type: spec` frontmatter and sections `## Goal`, optional `## Scope`, `## User Stories`, `## Scenarios`, `## Glossary`, `## Sources`.
+5. **Verify zero dangling links — acceptance gate.** Same rule as `ingest`: every `[[...]]` reference must resolve. Create stub concept pages (`confidence: low`) for dangling glossary terms or remove the link.
+6. Update `wiki/index.md` `## Specs` table + Statistics, and append a dated `wiki/log.md` entry.
+
+No paired synthesis page is produced. If the wiki lacks enough material to ground the scenarios in real domain concepts, say so and suggest sources — do not invent business rules.
 
 ### `pdfbook <path>`
 
