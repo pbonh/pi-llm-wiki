@@ -1,6 +1,6 @@
 ---
 name: wiki-maintainer
-description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards, Marp presentations, and Gherkin specs, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
+description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards, Marp presentations, and Gherkin specs, derive vision/contexts/context-maps via strategic design, manage ADRs, emit & round-trip Hermes Kanban tasks, run the refinement loop, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
 ---
 
 # wiki-maintainer
@@ -107,6 +107,86 @@ Run the PDF → mdBook workflow on a PDF (typically under `raw/`, but any path i
 8. Update `wiki/index.md` `## Books` table with a row whose `Page` cell links directly to the rendered book (`[[books/<slug>/src/SUMMARY|<Title>]]`) — do not link to a summary page; this workflow does not create one. Append a dated `wiki/log.md` entry.
 
 Never invent chapters or content. Re-runs overwrite chapter files in place rather than duplicating. Prefer `marker` or `docling` if installed for higher-fidelity extraction, but never add them as deps.
+
+### `strategy <topic>`
+
+Run the Strategy workflow to derive [[concepts/domain-driven-design]] strategic-design artifacts from the wiki. Output: one page in `wiki/vision/`, one or more pages in `wiki/contexts/`, one page in `wiki/context-maps/`. Strategy is re-runnable; later runs update existing pages by slug rather than duplicating.
+
+1. Read `wiki/index.md` and relevant concept/entity/summary pages.
+2. Distillation — identify core vs. supporting concepts.
+3. Write `wiki/vision/<topic-slug>.md` (`type: vision`) with `## Value Proposition`, `## In Scope`, `## Out of Scope`, `## Differentiation`, `## Revisions`.
+4. For each bounded context, write `wiki/contexts/<context-slug>.md` (`type: context`) with `## Model`, `## Boundary`, `## Ubiquitous Language` inline glossary, `## Relationships`.
+5. Write `wiki/context-maps/<topic-slug>.md` (`type: context-map`) with `## Contexts`, `## Translations` table, `## False Cognates`, `## Integration Patterns`.
+6. Cross-link vision ↔ contexts ↔ context map.
+7. Zero-dangling-links acceptance gate.
+8. Update `wiki/index.md` (Vision / Contexts / Context Maps tables + Statistics) and append to `wiki/log.md`.
+
+A single bounded context is fine and common; the context map then describes the boundary against the outside world. If the wiki lacks enough material to identify distinct contexts, say so — do not invent.
+
+### `adr <decision title>`
+
+Run the ADR workflow to open a new [[concepts/architectural-decision-record]] in `wiki/decisions/`.
+
+1. Pick the next four-digit number by scanning `wiki/decisions/NNNN-*.md`.
+2. Ask the user for the triggering [[concepts/architecturally-significant-requirement]] — **refuse to proceed without one** (an ADR without an ASR is the AKM log-bloat failure mode). The ASR goes in `## Context`.
+3. Choose a template: **Nygard** (default, 5 sections), **MADR** (when multiple alternatives deserve preserved analysis), **Y-Statement** (one-liner).
+4. Write `wiki/decisions/NNNN-<kebab-title>.md` with `type: decision`, `## Status: proposed`, ASR citation, and the required sections for the chosen template.
+5. Cross-link to every wiki page the decision governs.
+6. **Refuse to edit an `accepted` ADR.** Open a new ADR that supersedes it; with the user's permission, flip the predecessor's `## Status` to `superseded by NNNN` and link the successor.
+7. Zero-dangling-links acceptance gate.
+8. Update `wiki/index.md` Decisions table + Statistics, append to `wiki/log.md`.
+
+Status is load-bearing for downstream workflows — `/wiki-spec` warns when no `accepted` ADR governs the domain, and `/wiki-kanban-emit` picks the collaboration pattern from status.
+
+### `kanban-emit <spec-slug>`
+
+Run the Kanban Emit workflow to decompose a spec page onto a [[concepts/durable-task-board]] hosted by [[entities/hermes-agent]].
+
+**Preflight (hard).** `hermes kanban assignees` must succeed. If `hermes` is not on `PATH`, abort with the install hint pointing at https://github.com/NousResearch/hermes. Kanban emission requires Hermes; the rest of this wiki works without it.
+
+**ADR gate (soft).** If the spec cites no `accepted` ADR, warn the user and offer to hand off to `/wiki-adr` first. Proceed on confirmation; record the choice in the spec's `## Sources`.
+
+1. Read `wiki/specs/<spec-slug>.md` in full.
+2. Read every cited ADR (confirm `## Status: accepted`) and the relevant `wiki/contexts/<context>.md` `## Ubiquitous Language` for inlining.
+3. Compute idempotency key: `<spec-slug>:<adr-id>:<sha256(spec-body)>` per [[concepts/idempotency-key]].
+4. Enumerate Hermes profiles via the preflight output; map logical roles (`implementer`/`reviewer`/`integrator`) to real profile names. Fail loudly on missing mappings.
+5. Pick the [[concepts/collaboration-pattern]] from ADR status: `accepted` → P2 pipeline; `proposed` → P5 human-in-the-loop; multiple feature files → P1 fan-out parent; `deprecated`/`superseded` without successor → refuse to emit.
+6. Decompose into one `kanban_create` per user story. Each task body MUST include goal, approach, acceptance criteria verbatim, Gherkin block fenced, inlined glossary excerpt, wiki backlink, ADR id(s), and a `@wiki-spec` tag.
+7. Express ordering with `parents=[...]`. Reject relative `workspace=dir:` paths.
+8. Append a `## Kanban Tasks` section to the spec page recording the key, ADR ids, pattern, profile mapping, and task ids.
+9. Zero-dangling-links acceptance gate on the updated spec page.
+10. Append to `wiki/log.md`. **Fire and forget — do not poll** (per [[concepts/orchestrator-pattern]]).
+
+**Discipline:** the extension creates rows and steps back. It does not claim, run, or shell out to do worker tasks.
+
+### `kanban-ingest <task-id | run-id>`
+
+Run the Kanban Ingest workflow to round-trip a completed Hermes run back into the wiki as a [[concepts/living-documentation]] receipt.
+
+**Preflight (hard).** Same `hermes kanban assignees` check as `kanban-emit`. Abort with the same install-hint message if Hermes is unavailable.
+
+1. Fetch the run via `hermes kanban show <id>` (or db-layer equivalent). Capture `summary`, `verification`, `changed_files`, `residual_risk`, and the [[concepts/structured-handoff]] payload.
+2. **Sanitize.** Refuse to copy tokens, OAuth material, raw logs, or unrelated transcripts. If metadata is dirty, surface to the user and stop — do not silently scrub.
+3. Locate the originating wiki page via the `@wiki-spec` tag or wiki backlink.
+4. Append a `## Implementation Evidence` section: run id, timestamp, assignee, `verification` + result, `changed_files`, `residual_risk`, one-paragraph summary. On re-ingest, add a new dated subheading.
+5. Update the target's frontmatter `updated` field.
+6. Zero-dangling-links acceptance gate.
+7. Append to `wiki/log.md`.
+
+If the run failed, still ingest — mark `Result: failed` and quote the failure reason. Documenting failures honestly is the point of living documentation.
+
+### `refine <run-id | breakthrough note>`
+
+Run the Refine workflow — the *structural* counterpart to `kanban-ingest`. Use when a run outcome or [[concepts/breakthrough]] invalidates a prior model (moved context boundary, new [[concepts/false-cognate]], invalidated decision).
+
+1. Classify the trigger: **documentary only** → hand off to `kanban-ingest` and stop; **structural** → continue.
+2. Update upstream model — `wiki/concepts/`, `wiki/contexts/`, or `wiki/context-maps/` as appropriate.
+3. If a decision was invalidated: hand off to `adr` to open a superseding ADR (write-once, never edit the accepted predecessor). The new ADR cites the originating run id; flip the predecessor's status to `superseded by NNNN`.
+4. Re-emit affected kanban tasks via `kanban-emit` — the fresh `<spec-slug>:<new-adr-id>:<sha256>` triple produces a new task row. Close old rows with a `kanban_comment` pointing forward.
+5. Zero-dangling-links acceptance gate on every page touched.
+6. Update `wiki/index.md` and append to `wiki/log.md`.
+
+Use Refine sparingly — most outcomes are documentary — but use it without hesitation when an ADR is invalidated. An unrecorded supersession is worse than an explicit one.
 
 ### `new <domain>`
 

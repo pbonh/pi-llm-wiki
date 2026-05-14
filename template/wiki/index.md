@@ -56,6 +56,30 @@ Master catalog of all wiki pages. Every page in the wiki must have an entry here
 |------|-------|-------|-----|---------|
 | <!-- entries added by LLM during /pdf-to-mdbook --> | | | | |
 
+## Vision
+
+| Page | Topic | In Scope | Updated |
+|------|-------|----------|---------|
+| <!-- entries added by LLM during /wiki-strategy --> | | | |
+
+## Contexts
+
+| Page | Bounded Context | Boundary | Updated |
+|------|-----------------|----------|---------|
+| <!-- entries added by LLM during /wiki-strategy --> | | | |
+
+## Context Maps
+
+| Page | Topic | Contexts | False Cognates | Updated |
+|------|-------|----------|----------------|---------|
+| <!-- entries added by LLM during /wiki-strategy --> | | | | |
+
+## Decisions
+
+| Page | Title | Status | ASR | Updated |
+|------|-------|--------|-----|---------|
+| <!-- entries added by LLM during /wiki-adr --> | | | | |
+
 ## Statistics
 
 - **Total pages**: 0
@@ -67,6 +91,10 @@ Master catalog of all wiki pages. Every page in the wiki must have an entry here
 - **Presentations**: 0
 - **Specs**: 0
 - **Books**: 0
+- **Vision statements**: 0
+- **Bounded contexts**: 0
+- **Context maps**: 0
+- **Decisions (proposed/accepted/superseded/deprecated)**: 0/0/0/0
 - **Sources ingested**: 0
 - **High confidence**: 0
 - **Medium confidence**: 0
