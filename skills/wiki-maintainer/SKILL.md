@@ -1,6 +1,6 @@
 ---
 name: wiki-maintainer
-description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards, Marp presentations, and Gherkin specs, derive vision/contexts/context-maps via strategic design, manage ADRs, emit & round-trip Hermes Kanban tasks, run the refinement loop, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
+description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards, Marp presentations, and Gherkin specs, derive vision/contexts/context-maps via strategic design, grill open design questions, manage ADRs, emit & round-trip Hermes Kanban tasks, run the refinement loop, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
 ---
 
 # wiki-maintainer
@@ -122,6 +122,25 @@ Run the Strategy workflow to derive [[concepts/domain-driven-design]] strategic-
 8. Update `wiki/index.md` (Vision / Contexts / Context Maps tables + Statistics) and append to `wiki/log.md`.
 
 A single bounded context is fine and common; the context map then describes the boundary against the outside world. If the wiki lacks enough material to identify distinct contexts, say so — do not invent.
+
+### `grill <topic>`
+
+Run the Grill workflow to surface and resolve open design questions for `<topic>` **before** specs are written. Sits between `strategy` and `architecture` in the R&D pipeline. Output: one page in `wiki/grills/`. Re-runnable — resumes at the next unanswered question rather than duplicating.
+
+**Preflight (hard).** Run `scripts/check-prereqs.sh grill --slug <topic-slug>`. On exit 1, print `missing: <name> — <hint>` and abort without writing anything. Manifest absent → exit 0 (back-compat). Hard prereq: `wiki/vision/<topic-slug>.md` (run `strategy` first).
+
+1. Read `wiki/vision/<topic-slug>.md` in full, then every `wiki/contexts/*.md` it cites, then `wiki/concepts/*.md` reachable via `[[wikilinks]]` from there.
+2. If `wiki/grills/<topic-slug>.md` exists, resume from it — the existing `## Q&A Log`, `## Decisions Made`, `## Decision Tree`, and `## Open Questions` are authoritative.
+3. **First run only:** identify 3–7 top-level decisions, print them numbered under a candidate `## Decision Tree`, ask which to grill first. **Do not proceed until the user picks.**
+4. **Depth-first, one question per turn.** Each question has 2–4 concrete options numbered, plus an `other → free text` escape. Branch into follow-ups until the subtree is exhausted; then return to the next top-level decision the user selects. One question per turn is a hard rule — never batch.
+5. **Parking.** "I don't know yet" / "park this" / "skip" → copy the question verbatim into `## Open Questions` and move on. Never blocks.
+6. Write `wiki/grills/<topic-slug>.md` with `type: grill` frontmatter and sections `## Decision Tree`, `## Q&A Log`, `## Decisions Made`, `## Open Questions`, `## Cross-Links`. `## Q&A Log` is append-only with global `Q<n>` numbering; `## Decisions Made` bullets are keyed by short title (same title rewrites; new title appends).
+7. Append (or update in place) a `## Grill Notes` section on the vision page linking the grill.
+8. On mid-session exit, set `## Status: in progress (resume with /wiki-grill <topic>)`. On clean exit, set `## Status: done` or omit.
+9. Zero-dangling-links acceptance gate. Forward-placeholder links to not-yet-written architecture / ADR / spec pages get stubbed (`confidence: low`) or removed.
+10. Update `wiki/index.md` (add a row under `## Grills`; create the table if absent) and append to `wiki/log.md`.
+
+Downstream: `/wiki-architecture` reads the grill to know which questions the diagrams should answer; `/wiki-adr` typically cites a specific `## Decisions Made` bullet as rationale. If the vision page is too thin to derive 3 top-level decisions, say so and suggest `/wiki-strategy` to enrich it — do not invent decisions the wiki cannot support.
 
 ### `adr <decision title>`
 
