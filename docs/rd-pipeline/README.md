@@ -7,17 +7,25 @@ If you have not read [`docs/tutorial-rd-pipeline.md`](../tutorial-rd-pipeline.md
 ## The pipeline at a glance
 
 ```
-strategy ──> adr ──> spec ──> kanban-emit ──> (workers) ──> kanban-ingest ──> refine ──> back to adr / spec
+strategy ──> grill ──> architecture ──> adr ──> spec ──> kanban-emit ──> (workers) ──> kanban-ingest ──> refine ──> back to adr / spec
+                                                            ▲                                ▲
+                                                            │                                │
+                                                  triage / triage-promote feed parked questions in
 ```
 
 | Stage | Command | Output | Hermes required |
 |---|---|---|---|
 | Strategic design | [`/wiki-strategy`](./strategy.md) | `wiki/vision/`, `wiki/contexts/`, `wiki/context-maps/` | No |
-| Architectural commitment | [`/wiki-adr`](./adr.md) | `wiki/decisions/NNNN-<title>.md` | No |
-| Executable specification | [`/wiki-spec`](./spec.md) | `wiki/specs/<slug>.md` with Gherkin + glossary | No |
-| Task emission | [`/wiki-kanban-emit`](./kanban-emit.md) | Kanban tasks on Hermes board; `## Kanban Tasks` section on the spec | **Yes** |
-| Run round-trip | [`/wiki-kanban-ingest`](./kanban-ingest.md) | `## Implementation Evidence` section on the originating wiki page | **Yes** |
+| Question surfacing | [`/wiki-grill`](./grill.md) | `wiki/grills/<topic>.md` — decision tree, depth-first Q&A log, decisions made, open questions | No |
+| Diagrams | [`/wiki-architecture`](./architecture.md) | `wiki/architecture/<topic>.md` — Mermaid C4 blocks + `## Decisions Surfaced` | No |
+| Architectural commitment | [`/wiki-adr`](./adr.md) | `wiki/decisions/NNNN-<title>.md`; upserts `→ ADR-NNNN` on matching surfaced-decision bullet | No |
+| Executable specification | [`/wiki-spec`](./spec.md) | `wiki/specs/<slug>.md` with Gherkin + glossary + `adr_ids` frontmatter | No |
+| Task emission | [`/wiki-kanban-emit`](./kanban-emit.md) | Parent + per-scenario children + aggregator kanban tasks; `## Kanban Tasks` section on spec | **Yes** |
+| Run round-trip | [`/wiki-kanban-ingest`](./kanban-ingest.md) | `## Implementation Evidence` with per-attempt subsections on the originating wiki page | **Yes** |
+| Parking inbox | `/wiki-triage`, `/wiki-triage-promote` | Triage-column tasks with `@wiki-source` traceability; promotion expands a one-liner into a real spec | **Yes** |
 | Structural feedback | [`/wiki-refine`](./refine.md) | Updated concept/context pages + superseding ADR + re-emitted tasks | Only if it ends up re-emitting |
+
+The [pipeline manifest](./pipeline-manifest.md) wires these into a dependency graph. Every slash command runs `scripts/check-prereqs.sh <artifact>` before doing any work; missing prereqs abort with a named error. The kanban surface also adds two `git_check`s (`spec-on-trunk`, `worker-branch-merged`) that refuse to emit or ingest while idempotency keys would hash moving values or evidence would point at unmerged code.
 
 ## Load-bearing properties
 

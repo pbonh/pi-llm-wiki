@@ -1,13 +1,27 @@
 ---
 name: wiki-maintainer
-description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards, Marp presentations, and Gherkin specs, derive vision/contexts/context-maps via strategic design, grill open design questions, manage ADRs, emit & round-trip Hermes Kanban tasks, run the refinement loop, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
+description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards, Marp presentations, and Gherkin specs, derive vision/contexts/context-maps via strategic design, grill open design questions, draw C4 architecture diagrams, manage ADRs, emit & round-trip Hermes Kanban tasks, run the refinement loop, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
 ---
 
 # wiki-maintainer
 
 Operate an [llm-wiki](https://github.com/pbonh/llm-wiki) knowledge base.
 
-The wiki schema — page format, frontmatter, tagging, linking, confidence levels, and the Ingest/Query/Lint workflows — lives in `AGENTS.md` at the repo root. Always read `AGENTS.md` first; this skill is a thin dispatcher into the workflows defined there.
+The wiki schema — page format, frontmatter, tagging, linking, confidence levels, and every workflow — lives in `AGENTS.md` at the repo root. Always read `AGENTS.md` first; this skill is a thin dispatcher into the workflows defined there.
+
+This is the **omnibus skill**: it bundles every subcommand below. For composable per-phase entry points, see the focused skills:
+
+- `wiki-ingest` — Ingest workflow only.
+- `wiki-query` — Query workflow only.
+- `wiki-lint` — Lint workflow only.
+- `wiki-strategy` — Strategic-design phase only.
+- `wiki-grill` — Grill (open-questions) phase only.
+- `wiki-architecture` — C4 diagrams phase only.
+- `wiki-adr` — ADR workflow only.
+- `wiki-spec` — Gherkin spec synthesis only.
+- `wiki-kanban` — Kanban emit + ingest + triage (requires `hermes` on PATH).
+
+The per-phase skills all delegate to the same `AGENTS.md` workflow sections, so any one of them is sufficient on its own. Use `wiki-maintainer` when you want one entry point that knows them all; use a focused skill when you want a smaller surface that composes with other agent workflows.
 
 ## Subcommands
 
@@ -142,6 +156,25 @@ Run the Grill workflow to surface and resolve open design questions for `<topic>
 
 Downstream: `/wiki-architecture` reads the grill to know which questions the diagrams should answer; `/wiki-adr` typically cites a specific `## Decisions Made` bullet as rationale. If the vision page is too thin to derive 3 top-level decisions, say so and suggest `/wiki-strategy` to enrich it — do not invent decisions the wiki cannot support.
 
+### `architecture <topic>`
+
+Run the Architecture workflow to draw [C4](https://c4model.com/) diagrams (in Mermaid) for a topic. Sits between `grill` and `adr` in the R&D pipeline. Output: one page in `wiki/architecture/` plus `## Architecture` cross-links on every referenced bounded-context page. Re-runnable — Mermaid blocks are keyed by parent heading and rewritten in place.
+
+**Preflight (hard).** `scripts/check-prereqs.sh architecture --slug <topic-slug>` — refuses if the vision page is missing (transitively). The grill page is `optional_in_v1: true` (warns rather than blocks); the vision page is required.
+
+1. Read `wiki/vision/<topic-slug>.md`; read `wiki/grills/<topic-slug>.md` if it exists (its `## Decisions Made` and `## Open Questions` shape which questions the diagrams must answer); read cited bounded-context and concept pages.
+2. **Purpose gate (hard).** Ask *"What question does this diagram set answer?"* — refuse to draw anything until the user gives a single, non-empty sentence. The sentence becomes `## Purpose` verbatim.
+3. **Level selection.** Ask which C4 levels are needed (Context / Container / Component / Dynamic / Deployment). Default to Context + Container on *"minimum"*. **Refuse all five without a stated question per level.**
+4. **Format.** All diagrams as fenced ` ```mermaid ` blocks using `C4Context` / `C4Container` / `C4Component` / `C4Deployment` syntax; `sequenceDiagram` or `flowchart` for Dynamic. ASCII fallback only on opt-out.
+5. Write `wiki/architecture/<topic-slug>.md` with `type: architecture` frontmatter and the required sections: `## Purpose`, the chosen C4 level sections, `## Assumptions`, `## Open Questions`, `## Decisions Surfaced`, `## Cross-Links`.
+6. **`## Decisions Surfaced` is load-bearing.** One bullet per architectural decision: `**<short title>** — <one-line summary>`. `/wiki-adr` consumes this list; after `/wiki-adr` runs, the matching bullet is upserted with `→ ADR-NNNN`.
+7. **Approval gate.** Print *"Architecture pending approval. Run `/wiki-adr <decision title>` for each surfaced decision."* Do **not** invoke `/wiki-adr` automatically.
+8. Append (or update in place) a `## Architecture` section on every referenced `wiki/contexts/<context>.md` linking forward.
+9. Zero-dangling-links acceptance gate.
+10. Update `wiki/index.md` (`## Architecture` table — create if absent) and append to `wiki/log.md`.
+
+Downstream: `/wiki-adr` requires a matching `## Decisions Surfaced` bullet; `/wiki-spec` reads the diagrams to ground actor/boundary terminology; `/wiki-lint` (Phase 7) validates every Mermaid block when `mmdc` is on PATH.
+
 ### `adr <decision title>`
 
 Run the ADR workflow to open a new [[concepts/architectural-decision-record]] in `wiki/decisions/`.
@@ -193,6 +226,33 @@ Run the Kanban Ingest workflow to round-trip a completed Hermes run back into th
 7. Append to `wiki/log.md`.
 
 If the run failed, still ingest — mark `Result: failed` and quote the failure reason. Documenting failures honestly is the point of living documentation.
+
+### `triage <note> [--from <page>]`
+
+Park a wiki-side open question onto Hermes' triage column. `<note>` is a one-line question; `--from <page>` (optional) cites the originating wiki page (typically a grill or architecture `## Open Questions` entry).
+
+**Preflight (hard).** `hermes kanban assignees` must succeed. Abort with the same install-hint as `kanban-emit`.
+
+1. Parse the args; reject empty notes.
+2. Compose the body: `## Question` (note verbatim), optional `## Source` (linking the originating page and quoting the surrounding bullet), and a `@wiki-source` traceability tag.
+3. Create the task via `hermes kanban create --triage --skill wiki-maintainer --skill kanban-worker --tenant <bounded-context-slug>`. Tenant derives from the source page's context; falls back to `triage`.
+4. If `--from <page>` was given, append `→ triage:<task-id>` to the source page's matching `## Open Questions` bullet (idempotent).
+5. Append a dated entry to `wiki/log.md`.
+
+### `triage-promote <task-id>`
+
+Promote a triage-column task into a real spec via Hermes' `kanban specify` (P9 specifier pattern), then hand off to `wiki-spec`.
+
+**Preflight (hard).** Same Hermes check as `triage`.
+
+1. Fetch the task; refuse if it is not in `triage`.
+2. Run `hermes kanban specify <id>` to expand the one-liner into a structured spec body (problem statement, acceptance criteria, glossary).
+3. Derive a spec slug from the title; confirm with the user.
+4. Hand off to the `spec` workflow with the specifier output as the goal. All normal spec gates apply, including the accepted-ADR preflight.
+5. Comment the triage task with the resulting spec path, move it to `done` (or `cancelled` on abandon), and on the originating wiki page replace `→ triage:<id>` with `→ spec:<slug>`.
+6. Append a dated entry to `wiki/log.md`.
+
+If the specifier output is too ambiguous to turn into a coherent goal, stop. Do not invent.
 
 ### `refine <run-id | breakthrough note>`
 

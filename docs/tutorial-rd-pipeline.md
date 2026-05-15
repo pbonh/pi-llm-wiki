@@ -4,17 +4,23 @@ This tutorial walks through every step of the R&D pipeline against a single exam
 
 The example we will use: **a shipping-rate API** that aggregates carrier quotes (USPS, UPS, FedEx) behind a single endpoint. Concrete enough to have real bounded contexts (rating, carrier integration, cache), real architectural decisions (which timeout strategy, whether to share a rate schema across carriers), and real Gherkin-shaped behavior. Swap it for whatever you are actually building.
 
-The seven slash commands you will use, in the order they appear:
+The nine slash commands you will use, in the order they appear:
 
 1. `/wiki-ingest` — same as the basic tutorial, but used to seed the domain knowledge the pipeline runs on.
 2. `/wiki-strategy` — distill vision, bounded contexts, and a context map from the ingested wiki.
-3. `/wiki-adr` — pin an architecturally-significant commitment as a write-once Architectural Decision Record.
-4. `/wiki-spec` — synthesize Gherkin scenarios from a user goal, gated softly on having an `accepted` ADR.
-5. `/wiki-kanban-emit` — decompose the spec onto a [Hermes Kanban](https://github.com/NousResearch/hermes) board with idempotent task identity.
-6. `/wiki-kanban-ingest` — round-trip a completed kanban run back into the wiki as an `## Implementation Evidence` section.
-7. `/wiki-refine` — close the loop when a run outcome invalidates a prior model: supersede the ADR, re-emit affected tasks, update the upstream concept pages.
+3. `/wiki-grill` — surface the open design questions *before* drafting specs. Decision-tree, depth-first, one question per turn.
+4. `/wiki-architecture` — draw C4 diagrams in Mermaid that answer a stated `## Purpose`, and produce the `## Decisions Surfaced` list that `/wiki-adr` consumes.
+5. `/wiki-adr` — pin an architecturally-significant commitment as a write-once Architectural Decision Record. Refuses without a matching surfaced-decision bullet when an architecture page exists.
+6. `/wiki-spec` — synthesize Gherkin scenarios from a user goal, gated hard on at least one `accepted` ADR.
+7. `/wiki-kanban-emit` — decompose the spec onto a [Hermes Kanban](https://github.com/NousResearch/hermes) board with parent + per-scenario children + aggregator, idempotent per scenario. Refuses while the spec is unmerged.
+8. `/wiki-kanban-ingest` — walk every run attempt, validate the structured handoff, and round-trip back to the wiki as `## Implementation Evidence`. Refuses while the worker's branch is unmerged.
+9. `/wiki-refine` — close the loop when a run outcome invalidates a prior model: supersede the ADR, re-emit affected tasks, update the upstream concept pages.
 
-Steps 5–7 require [`hermes`](https://github.com/NousResearch/hermes) on `PATH`. Steps 1–4 do not.
+Plus the parking inbox (`/wiki-triage`, `/wiki-triage-promote`) for questions you cannot answer in-flight.
+
+Steps 7, 8, 9 (when it re-emits), and the triage commands require [`hermes`](https://github.com/NousResearch/hermes) on `PATH`. Steps 1–6 do not.
+
+All of the gates are wired through `wiki/.pipeline.yaml` and `scripts/check-prereqs.sh`. See the [pipeline manifest reference](./rd-pipeline/pipeline-manifest.md) for the schema.
 
 ## 0. Pre-flight
 
@@ -78,6 +84,53 @@ If the wiki does not have enough material to identify distinct bounded contexts,
 
 The Glossary entries you accumulate on each `wiki/contexts/<slug>.md` page are **load-bearing for `/wiki-kanban-emit`** — those glossary excerpts get inlined into kanban task bodies later to prevent false-cognate drift across workers.
 
+## 2b. `/wiki-grill` — surface the questions before specs
+
+```
+/wiki-grill shipping-rate-api
+```
+
+The grill workflow is modeled on Matt Pocock's [`grill-me` skill](https://github.com/mattpocock/skills/blob/main/skills/productivity/grill-me/SKILL.md): build a decision tree, interrogate depth-first, ask **one question per turn** with 2–4 concrete options (plus an `other → free text` escape). The output is `wiki/grills/shipping-rate-api.md` with five sections:
+
+- `## Decision Tree` — the 3–7 top-level decisions the agent surfaced, with indented sub-questions filled in during interrogation.
+- `## Q&A Log` — numbered `Q1` / `A1` / `Q2` / `A2` … pairs, exact wording preserved. Append-only across re-runs; resume picks up at the next number.
+- `## Decisions Made` — one bullet per resolved decision, keyed by short title: `**<title>** — <picked option>. <one-line rationale>`. Same title on re-run rewrites the bullet in place; new titles append.
+- `## Open Questions` — parked items, verbatim. Append-only across runs. Use `/wiki-triage` to promote a parked question into a real spec later.
+- `## Cross-Links` — backlinks to strategy + cited contexts/concepts; forward placeholders to architecture / ADR / spec.
+
+Grill is re-runnable: `/wiki-grill shipping-rate-api` again resumes at the next unanswered subtree. The vision page is a hard prereq (`scripts/check-prereqs.sh grill --slug shipping-rate-api` walks `grill → strategy`); without it the command aborts with `missing: strategy`.
+
+If the user parks a question mid-grill (*"I don't know yet"*, *"skip"*), the verbatim question lands in `## Open Questions` and the grill moves on. Parking never blocks. Promote parked questions later with:
+
+```
+/wiki-triage "should rate caching apply to internal RPC calls too?" --from wiki/grills/shipping-rate-api.md
+# ... later:
+/wiki-triage-promote <triage-task-id>
+```
+
+## 2c. `/wiki-architecture` — draw C4 diagrams that answer a stated question
+
+```
+/wiki-architecture shipping-rate-api
+```
+
+The architecture workflow draws [C4 diagrams](https://c4model.com/) in Mermaid, and produces the `## Decisions Surfaced` list that `/wiki-adr` will consume. Output is `wiki/architecture/shipping-rate-api.md`.
+
+Before any diagram is drawn, the agent asks: *"What question does this diagram set answer?"* It refuses to draw anything until the user gives a single, non-empty sentence — *"general system architecture"* fails the gate; *"How does a rate request flow through cache, carrier adapters, and aggregator when one carrier times out?"* passes. The sentence becomes the page's `## Purpose` verbatim.
+
+Then the agent asks which C4 levels are needed (Context / Container / Component / Dynamic / Deployment). The default on *"minimum"* is Context + Container. The agent refuses to draw all five without per-level justification — each level should answer a real question the user can name.
+
+The required sections:
+
+- `## Purpose` — one-sentence question.
+- The chosen C4 level sections — Mermaid fenced blocks (` ```mermaid C4Context `, ` ```mermaid C4Container `, etc.).
+- `## Assumptions` — bulleted, append-only.
+- `## Open Questions` — bulleted, append-only. Carries forward to ADR or refine.
+- `## Decisions Surfaced` — **bulleted, load-bearing for `/wiki-adr`.** One bullet per architectural decision the diagrams imply: `**<short title>** — <one-line summary>`. After `/wiki-adr` runs, each bullet is upserted with `→ ADR-NNNN`.
+- `## Cross-Links` — backlinks to vision / grill / contexts; forward placeholders to ADR / spec.
+
+Re-runs update Mermaid blocks in place (keyed by parent heading). `## Decisions Surfaced` bullets are keyed by short title — same title rewrites; new titles append.
+
 ## 3. `/wiki-adr` — pin a load-bearing architectural commitment
 
 Pick one decision you are about to make whose effect on structure or quality attributes is large enough that you want a written, immutable rationale. A good candidate from our example: "Rate responses are cached by `(origin_zip, destination_zip, weight_bucket, carrier)` — we do **not** cache by literal address."
@@ -111,6 +164,8 @@ The status field is **load-bearing for downstream workflows**:
 
 - `/wiki-spec` warns when no `accepted` ADR governs the spec's domain.
 - `/wiki-kanban-emit` picks the collaboration pattern from the cited ADRs' status (`accepted` → pipeline, `proposed` → human-in-the-loop, `deprecated`/`superseded`-without-successor → refuse).
+
+**New in Phase 3:** when an architecture page exists for the topic, `/wiki-adr` refuses to open an ADR whose short title doesn't match a bullet under that page's `## Decisions Surfaced`. After the ADR is written, the agent upserts ` → ADR-NNNN` onto the matching bullet, so the architecture page becomes the canonical map from surfaced decisions to written commitments. Architecture pages without an ADR for each surfaced decision are flagged by `/wiki-lint`.
 
 ## 4. `/wiki-spec` — synthesize Gherkin from a user goal
 
@@ -153,15 +208,21 @@ Scenario: Cheapest quote returned across three carriers
 
 **Requires `hermes` on `PATH`.** The prompt preflights `hermes kanban assignees` and aborts with an install hint if it is missing.
 
+**Commit and push the spec first.** As of Phase 4, the emit command refuses to proceed while `wiki/specs/<slug>.md` has unmerged edits — idempotency keys hash the spec body, so emitting while the spec is on a feature branch would produce a key that changes the moment the branch lands on trunk. The `git:spec-on-trunk` check runs `git merge-base --is-ancestor` to verify.
+
 ```
+git add wiki/specs/cheapest-quote-with-cache-fallback.md
+git commit -m "spec: cheapest quote with cache fallback"
+git push origin main
 /wiki-kanban-emit cheapest-quote-with-cache-fallback
 ```
 
 The workflow:
 
-1. **Preflight (hard).** `hermes kanban assignees`. If Hermes is missing or no profiles are configured, abort with: *"Hermes is not installed or no profiles are configured. See https://github.com/NousResearch/hermes. Kanban emission requires Hermes; the rest of this wiki works without it."*
-2. **ADR gate (soft).** If the spec cites no `accepted` ADR, warn and offer to hand control to `/wiki-adr`. Record any proceed-without-ADR choice in `## Sources`.
-3. Read `wiki/specs/cheapest-quote-with-cache-fallback.md` in full — frontmatter, every story, every scenario, glossary, sources.
+1. **Preflight 1 (manifest + git).** `scripts/check-prereqs.sh kanban_emit --slug <slug>` walks `kanban_emit → spec → adr → architecture (optional) → grill (optional) → strategy` and runs the `git:spec-on-trunk` check. Failures abort with the exact `git merge-base` command in the error so you can debug locally.
+2. **Preflight 2 (Hermes).** `hermes kanban assignees`. If Hermes is missing or no profiles are configured, abort with: *"Hermes is not installed or no profiles are configured. See https://github.com/NousResearch/hermes. Kanban emission requires Hermes; the rest of this wiki works without it."*
+3. **ADR gate (soft).** If the spec cites no `accepted` ADR, warn and offer to hand control to `/wiki-adr`. Record any proceed-without-ADR choice in `## Sources`.
+4. Read `wiki/specs/cheapest-quote-with-cache-fallback.md` in full — frontmatter, every story, every scenario, glossary, sources.
 4. For every cited ADR, confirm `## Status: accepted`. For the relevant `wiki/contexts/<context>.md` pages, read the inline `## Ubiquitous Language` glossary — these excerpts get **inlined into each task body** to prevent false-cognate drift across workers.
 5. **Compute the idempotency key:** `<spec-slug>:<adr-id>:<sha256(spec-body-excluding-frontmatter-and-Kanban-Tasks-section)>`. This triple is the cross-system identity of the task set. Re-emission semantics:
    - Same triple → updates the existing task.
@@ -175,15 +236,22 @@ The workflow:
    - Multiple independent feature files → wrap the pipeline in a **P1 fan-out** parent.
    - When reviewer agreement matters more than throughput → **P3 voting/quorum** (two reviewers + aggregator).
    - `deprecated` / `superseded` without a successor in `accepted` state → **refuse to emit**.
-8. **Decompose.** One `kanban_create` per user story. Each task body MUST include:
-   - The story's goal, verbatim from the spec.
-   - Approach (the story narrative when the spec has one; otherwise left open).
+8. **Decompose into parent + per-scenario children + aggregator.** **New in Phase 5a:**
+   - One **parent task** per spec (key `<spec-slug>:<adr-id>:<sha256(spec-body)>`) — its body carries full spec context.
+   - One **child task per Gherkin scenario** (key `<spec-slug>:<adr-id>:<scenario-slug>:<sha256(scenario-body)>`) with `parents=[parent_id]`. Children run in parallel (P1 fan-out semantics). Editing one scenario re-emits only that child — the other children's keys are unchanged.
+   - One **aggregator task** with `parents=[<every child id>]` that synthesizes the `## Implementation Evidence` block the wiki ingests.
+
+   Each task body MUST include:
+   - The story's or scenario's goal, verbatim from the spec.
+   - Approach (the narrative when the spec has one; otherwise left open).
    - Acceptance criteria verbatim.
    - The Gherkin block fenced inside ```` ```gherkin ````.
    - The relevant glossary excerpt **inlined** from the bounded-context page (not just a link — inline, to prevent drift).
    - A wiki backlink to `wiki/specs/<spec-slug>.md`.
    - The ADR id(s) cited by the spec.
    - A `@wiki-spec` traceability tag.
+   - A `## Required Handoff` section verbatim from [`prompts/_handoff-schema.md`](../prompts/_handoff-schema.md), spelling out the JSON keys (`changed_files`, `verification`, `dependencies`, `blocked_reason`, `retry_notes`, `residual_risk`, `branch_head`, `wiki_spec`, `wiki_adr_ids`) the worker must return on `metadata`. **New in Phase 5d:** `/wiki-kanban-ingest` validates this shape on round-trip and refuses to ingest runs whose handoff is missing keys.
+8a. **Skill pinning + tenant.** **New in Phase 5c:** every `kanban_create` call passes `--skill wiki-maintainer --skill kanban-worker --tenant <bounded-context-slug>` (tenant derives from the spec's `frontmatter.context`, falling back to `default`). `hermes kanban list --tenant <ctx>` then returns only that context's work.
 9. **Express ordering** with `parents=[...]` on each `kanban_create`. The reviewer task's `parents` is the implementer; the integrator's `parents` is the reviewer; the human-gate's `parents` is whatever it gates.
 10. **Workspace selection.** Tasks that mutate the wiki use `workspace=dir:<absolute path>`. Tasks that touch a code repo prefer `worktree`. Relative paths are rejected at dispatch (the [confused-deputy](https://en.wikipedia.org/wiki/Confused_deputy_problem) guard).
 11. **Record task ids on the spec page.** Append a `## Kanban Tasks` section listing: idempotency key, ADR ids, collaboration pattern, profile mapping, and each task's id + role + assignee.
@@ -206,18 +274,22 @@ You will normally know a run is done because you are watching the board, you got
 /wiki-kanban-ingest <task-id-or-run-id>
 ```
 
-**Requires `hermes` on `PATH`.** Same preflight as Emit.
+**Requires `hermes` on `PATH`.** Same Hermes preflight as Emit.
+
+**The worker must merge first.** As of Phase 4, ingest refuses to proceed while the run's `branch_head` is not yet on `origin/<trunk>` — `## Implementation Evidence` would otherwise be evidence pointing at code that does not exist on trunk. The `git:worker-branch-merged` check reads `metadata.branch_head` from the structured handoff and runs `git merge-base --is-ancestor` to verify.
 
 The workflow:
 
-1. Fetch the completed run via `hermes kanban show <id>`. Capture `summary`, `verification`, `changed_files`, `residual_risk`, and the structured-handoff payload.
-2. **Sanitize metadata.** The structured-handoff contract forbids tokens, OAuth material, raw logs, and unrelated transcripts. The agent copies summaries and pointers (file paths, commit hashes, run ids, URLs) and **refuses to copy secrets or raw logs even if they appear in the payload.** If the metadata is dirty, the agent surfaces the problem to you and stops — it does not silently scrub-and-copy.
-3. Locate the originating wiki page from the task body's `@wiki-spec` tag or the wiki backlink. Normally `wiki/specs/<spec-slug>.md`; for refinement-driven re-runs it may be a concept page.
-4. Append an `## Implementation Evidence` section to the target page with: run id, completion timestamp, assignee profile, `verification` command(s) + their result, `changed_files` (linked to the repo when possible), `residual_risk`, and a one-paragraph summary from the structured handoff.
-   - **On re-ingest, append a new dated subheading rather than overwriting.** The evidence section accumulates honestly.
-5. Update frontmatter `updated` on the target page and any `## Sources` row that points at the spec or concept.
-6. Run the zero-dangling-links acceptance gate.
-7. Append to `wiki/log.md` with run id, target page, verification outcome, and any residual risk.
+1. **Fetch attempt history.** **New in Phase 5d:** `hermes kanban runs <id> --json` returns *every* run for the task (the durable `task_runs` table). The agent walks all of them, not just the latest — multi-attempt history lands in `## Implementation Evidence` as `### Attempt N: <outcome>` subsections per non-final run.
+2. **Validate the handoff schema.** **New in Phase 5d:** every run's `metadata` must contain `changed_files`, `verification`, `dependencies`, `blocked_reason`, `retry_notes`, `residual_risk`, `branch_head`, `wiki_spec`, `wiki_adr_ids`. Missing any key → abort with `missing keys: [...]`. Do not partially ingest.
+3. **Git discipline check.** Pull `metadata.branch_head` from the handoff; run `scripts/check-prereqs.sh kanban_ingest --branch-head <sha>`. The `git:worker-branch-merged` check refuses while the branch is unmerged.
+4. **Sanitize metadata.** The structured-handoff contract forbids tokens, OAuth material, raw logs, and unrelated transcripts. The agent copies summaries and pointers (file paths, commit hashes, run ids, URLs) and **refuses to copy secrets or raw logs even if they appear in the payload.** If the metadata is dirty, the agent surfaces the problem to you and stops — it does not silently scrub-and-copy.
+5. Locate the originating wiki page from the task body's `@wiki-spec` tag or the wiki backlink. Normally `wiki/specs/<spec-slug>.md`; for refinement-driven re-runs it may be a concept page.
+6. Append an `## Implementation Evidence` section to the target page. Multi-attempt tasks get one `### Attempt N: <outcome>` subsection per non-final run (with `retry_notes` and `blocked_reason` quoted), then a final block with: run id, completion timestamp, assignee profile, `verification` command(s) + their result, `changed_files` (linked to the repo when possible), `residual_risk`, `branch_head`, and a one-paragraph summary from the structured handoff.
+   - **On re-ingest of a different run, append a new dated subheading rather than overwriting.** The evidence section accumulates honestly.
+7. Update frontmatter `updated` on the target page and any `## Sources` row that points at the spec or concept.
+8. Run the zero-dangling-links acceptance gate.
+9. Append to `wiki/log.md` with run id, target page, verification outcome, attempt count, and any residual risk.
 
 **Failed runs are still ingested.** A section is appended with `Result: failed` and the failure reason quoted from the handoff. Documenting failures honestly is the whole point — the next attempt has the prior failure's context.
 
@@ -271,27 +343,45 @@ The workflow:
                                 vision + contexts + map
                                             |
                                             v
-                                       /wiki-adr
+                                       /wiki-grill
+                                            |
+                                            v
+                              decision tree + Q&A + open Qs
+                                            |
+                                            v                  +-----------+
+                                  /wiki-architecture           |/wiki-triage|
+                                            |                  +-----+-----+
+                                            v                        |
+                              C4 + Decisions Surfaced ------>  triage column
+                                            |                        |
+                                            v                        v
+                                       /wiki-adr <- /wiki-triage-promote
                                             |
                                             v
                                   decisions/ accepted
                                             |
                                             v
-                                       /wiki-spec
+                                       /wiki-spec  (gates on accepted ADR)
                                             |
                                             v
                               specs/<slug>.md with Gherkin
+                                  +-- adr_ids[], context --+
+                                            |
+                                  git push origin <trunk>
                                             |
                                             v
-                                  /wiki-kanban-emit
+                                  /wiki-kanban-emit  (git:spec-on-trunk)
                                             |
                                             v
-                                  Hermes Kanban board
+                          parent + per-scenario children + aggregator
+                                  (skill=wiki-maintainer, tenant=<ctx>)
                                             |
-                                  (workers run, off-screen)
+                                  (workers run; report structured-handoff)
+                                            |
+                                  worker branches merge to trunk
                                             |
                                             v
-                                /wiki-kanban-ingest
+                                /wiki-kanban-ingest  (git:worker-branch-merged)
                                             |
                                   +---------+---------+
                                   |                   |

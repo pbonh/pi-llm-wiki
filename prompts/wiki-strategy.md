@@ -15,3 +15,5 @@ Steps (from AGENTS.md):
 8. Update `wiki/index.md` (Vision / Contexts / Context Maps tables, Statistics counts) and append a dated entry to `wiki/log.md`.
 
 Re-runs *update* existing pages by slug rather than duplicating. If the wiki lacks enough material to identify distinct bounded contexts, say so and suggest sources — do not invent contexts.
+
+After a clean run, hint: *"Strategy written. Next: run `/wiki-grill <topic>` to surface the open design questions before specs are drafted."*

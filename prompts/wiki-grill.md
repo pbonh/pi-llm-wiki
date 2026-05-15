@@ -48,6 +48,8 @@ Steps (from AGENTS.md):
 
 11. **Index + log.** Update `wiki/index.md` (add a row under a `## Grills` table; create the table if absent; bump Statistics) and append a dated entry to `wiki/log.md`.
 
-After a clean run, `scripts/check-prereqs.sh architecture --slug <topic-slug>` is expected to succeed — `/wiki-architecture <topic>` is the next step in the pipeline.
+After a clean run, `scripts/check-prereqs.sh architecture --slug <topic-slug>` is expected to succeed.
+
+Hint at the end: *"Grill captured. Next: run `/wiki-architecture <topic>` to draw the C4 diagrams that answer the questions you resolved here, and to surface the decisions to feed to `/wiki-adr`."*
 
 If the vision page is missing or too thin to ground decisions, say so and stop — do not invent decisions the wiki cannot support.
