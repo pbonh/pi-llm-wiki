@@ -223,13 +223,16 @@ git_checks:
 
 ```
 strategy ──> grill ──> architecture ──> adr ──> spec ──> kanban_emit ──> kanban_ingest ──> refine
-                                                          ↑                  ↑
-                                                          git:spec-on-trunk  git:worker-branch-merged
+                                                          ↑   ↑              ↑   ↑
+                                                          │   git:spec-on-trunk │
+                                                          │                     git:worker-branch-merged
+                                                          board_bound ─── project_init
 ```
 
 - `grill` and `architecture` are `optional_in_v1: true` — they warn rather than block when missing. v2 tightens them to required.
 - `git:spec-on-trunk` blocks `/wiki-kanban-emit` while the spec is on a feature branch (idempotency keys would hash a moving target).
 - `git:worker-branch-merged` blocks `/wiki-kanban-ingest` while the worker's branch is unmerged (the wiki would record evidence pointing at non-trunk code).
+- `project_init` and `board_bound` are infrastructure artifacts. `project_init` produces `project/README.md` (filled in by `/wiki-project-init`). `board_bound` requires `project_init` and produces `kanban/board.yaml` (filled in by `/wiki-kanban-board`). Both gate the kanban round-trip — emit and ingest will refuse to run until the board is bound.
 
 ### Enforcement modes
 
@@ -249,6 +252,40 @@ Absence of `wiki/.pipeline.yaml` is **not an error**. The helper exits 0 and sla
 That's it — no other files reference the artifact list directly.
 
 See `docs/rd-pipeline/pipeline-manifest.md` in the `pi-llm-wiki` source for the full reference (exit codes, JSON output, failure modes, idempotency rules).
+
+## Implementation Workspace
+
+The implementation of this project lives in `project/` (sibling of `wiki/`). Every changed-file path written by `/wiki-kanban-ingest` into a spec's `## Implementation Evidence` section must resolve under that directory. `/wiki-lint` enforces this.
+
+`/wiki-project-init` scaffolds the directory and walks the customization marker below; the manifest artifact `project_init` flips green once the marker is filled in.
+
+<!--
+CUSTOMIZE via `/wiki-project-init`. Fill in the implementation profile.
+  - language: <primary language(s)>
+  - build:    <build / package-manager command, e.g. `cargo build`>
+  - test:     <single command Hermes workers use to verify, e.g. `cargo test`>
+  - entry:    <path or command to start the program>
+Remove this HTML comment when done.
+-->
+
+## Kanban Board
+
+This wiki is bound to a Hermes Kanban board via `kanban/board.yaml`. Tasks are emitted by `/wiki-kanban-emit` and round-tripped by `/wiki-kanban-ingest`; both pass `--board <slug>` from `board.yaml` and resolve assignees via its `profiles:` section. See `kanban/README.md` for the file layout.
+
+`/wiki-kanban-board <slug>` binds the board and writes the YAML; the manifest artifact `board_bound` requires `project_init` and gates `kanban_emit` and `kanban_ingest`.
+
+<!--
+CUSTOMIZE via `/wiki-kanban-board <slug>`. The slash command writes
+`kanban/board.yaml`; do not edit this section by hand. The block below
+records what was chosen so future readers can see it without opening the
+YAML.
+  - slug:              <board slug>
+  - workspace_default: <dir:./project | worktree>
+  - orchestrator:      <profile name>
+  - worker:            <profile name>
+  - reviewer:          <profile name>
+Remove this HTML comment when done.
+-->
 
 ## Workflows
 

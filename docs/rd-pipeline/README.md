@@ -15,13 +15,15 @@ strategy ──> grill ──> architecture ──> adr ──> spec ──> kan
 
 | Stage | Command | Output | Hermes required |
 |---|---|---|---|
+| Workspace bootstrap | [`/wiki-project-init`](./project-workspace.md) | `project/`, `kanban/` scaffolds; `## Implementation Workspace` marker filled in | No |
+| Board binding | [`/wiki-kanban-board`](./kanban-staging.md) | `kanban/board.yaml` — slug, profiles, workspace shape; `## Kanban Board` marker filled in | **Yes** |
 | Strategic design | [`/wiki-strategy`](./strategy.md) | `wiki/vision/`, `wiki/contexts/`, `wiki/context-maps/` | No |
 | Question surfacing | [`/wiki-grill`](./grill.md) | `wiki/grills/<topic>.md` — decision tree, depth-first Q&A log, decisions made, open questions | No |
 | Diagrams | [`/wiki-architecture`](./architecture.md) | `wiki/architecture/<topic>.md` — Mermaid C4 blocks + `## Decisions Surfaced` | No |
 | Architectural commitment | [`/wiki-adr`](./adr.md) | `wiki/decisions/NNNN-<title>.md`; upserts `→ ADR-NNNN` on matching surfaced-decision bullet | No |
 | Executable specification | [`/wiki-spec`](./spec.md) | `wiki/specs/<slug>.md` with Gherkin + glossary + `adr_ids` frontmatter | No |
 | Task emission | [`/wiki-kanban-emit`](./kanban-emit.md) | Parent + per-scenario children + aggregator kanban tasks; `## Kanban Tasks` section on spec | **Yes** |
-| Run round-trip | [`/wiki-kanban-ingest`](./kanban-ingest.md) | `## Implementation Evidence` with per-attempt subsections on the originating wiki page | **Yes** |
+| Run round-trip | [`/wiki-kanban-ingest`](./kanban-ingest.md) | `## Implementation Evidence` + per-attempt `kanban/handoffs/<task-id>.<run-id>.json` | **Yes** |
 | Parking inbox | `/wiki-triage`, `/wiki-triage-promote` | Triage-column tasks with `@wiki-source` traceability; promotion expands a one-liner into a real spec | **Yes** |
 | Structural feedback | [`/wiki-refine`](./refine.md) | Updated concept/context pages + superseding ADR + re-emitted tasks | Only if it ends up re-emitting |
 

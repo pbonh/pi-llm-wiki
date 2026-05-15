@@ -1,7 +1,7 @@
 {
   "name": "pi-llm-wiki",
-  "version": "0.2.0",
-  "description": "pi coding agent integration for the llm-wiki template — sixteen slash commands and ten composable skills for ingesting sources, querying, linting, drafting Gherkin specs, running the full R&D pipeline (strategy → grill → architecture → ADR → spec → kanban → refine), and bootstrapping new wikis (template bundled, no clone required)",
+  "version": "0.3.0",
+  "description": "pi coding agent integration for the llm-wiki template — eighteen slash commands and ten composable skills for ingesting sources, querying, linting, drafting Gherkin specs, running the full R&D pipeline (strategy → grill → architecture → ADR → spec → kanban-board → kanban-emit → kanban-ingest → refine), scaffolding the project/ implementation workspace, and bootstrapping new wikis (template bundled, no clone required)",
   "keywords": ["pi-package", "pi", "llm-wiki", "knowledge-base", "wiki"],
   "bin": {
     "pi-llm-wiki-init": "./bin/init.js"

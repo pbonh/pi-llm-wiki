@@ -52,4 +52,6 @@ if (skipped.length > 0) {
 console.log('');
 console.log('Next:');
 console.log('  1. Run /wiki-new <domain description> in pi to customize the placeholders.');
-console.log('  2. Drop source files into raw/ and run /wiki-ingest <path>.');
+console.log('  2. Run /wiki-project-init to scaffold project/ and customize ## Implementation Workspace.');
+console.log('  3. Run /wiki-kanban-board <slug> to bind a Hermes board (required by /wiki-kanban-emit and /wiki-kanban-ingest).');
+console.log('  4. Drop source files into raw/ and run /wiki-ingest <path>.');

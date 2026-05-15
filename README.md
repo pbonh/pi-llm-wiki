@@ -2,7 +2,7 @@
 
 [pi coding agent](https://pi.dev/docs/latest) integration for the [llm-wiki](https://github.com/pbonh/llm-wiki) template.
 
-Adds sixteen slash commands and one skill to pi, plus a standalone init binary. **The template is bundled** — you do not need to clone `llm-wiki` separately. `npm install -g pi-llm-wiki`, run `pi` in any directory (empty or existing), and `/wiki-new` will scaffold and customize a wiki for you.
+Adds eighteen slash commands and ten composable skills (plus an omnibus skill) to pi, plus a standalone init binary. **The template is bundled** — you do not need to clone `llm-wiki` separately. `npm install -g pi-llm-wiki`, run `pi` in any directory (empty or existing), and `/wiki-new` will scaffold and customize a wiki for you.
 
 Beyond the basics (ingest / query / lint / flashcards / presentations / Gherkin specs / PDF→mdBook), pi-llm-wiki ships a full **research-and-development pipeline**: strategic design (vision + bounded contexts + context map), Architectural Decision Records, and round-trip task emission onto a [Hermes Kanban](https://github.com/NousResearch/hermes) board with structured-handoff ingest and ADR-driven refinement loops.
 
@@ -51,6 +51,7 @@ Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-w
 | Command | What it does |
 |---|---|
 | `/wiki-new <domain>` | Bootstrap a wiki in the cwd. Drops the bundled template if `AGENTS.md` is missing, then customizes every `<!-- ... -->` block. |
+| `/wiki-project-init` | Scaffold the implementation workspace (`project/`) and the kanban staging area (`kanban/`); walk the `<!-- CUSTOMIZE -->` block on `## Implementation Workspace` of `AGENTS.md` to record `language`, `build`, `test`, `entry`. Bootstrap-only — does not bind a Hermes board. Satisfies the manifest artifact `project_init`. |
 | `/wiki-ingest <path>` | Run the Ingest workflow on a file in `raw/` — generates a summary page, creates/updates concept and entity pages, adds cross-links, updates `wiki/index.md` and `wiki/log.md`. |
 | `/wiki-query <question>` | Search the wiki and synthesize an answer with `[[wiki-link]]` citations. Creates a synthesis page in `wiki/syntheses/` if the answer reveals novel insight. |
 | `/wiki-spec <goal>` | Synthesize Gherkin specs from a user goal into `wiki/specs/<slug>.md`. Runs an automated specification-by-example workshop: derives user stories + acceptance criteria, emits Gherkin scenarios in fenced blocks, and records a ubiquitous-language glossary. Same zero-dangling-links acceptance gate as `/wiki-ingest`. |
@@ -62,24 +63,36 @@ Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-w
 | `/wiki-grill <topic>` | Surface open design questions **before** specs. Builds a 3–7-decision tree, interrogates depth-first **one question per turn** with concrete options, parks what cannot be answered. Output: `wiki/grills/<topic>.md` with `## Decision Tree`, `## Q&A Log` (append-only, globally numbered), `## Decisions Made` (keyed by title), `## Open Questions`. Re-runnable — resumes at the next unanswered question. Refuses without a strategy page. |
 | `/wiki-architecture <topic>` | Draw [C4](https://c4model.com/) diagrams in Mermaid, only after a stated `## Purpose` and only at the chosen levels (Context / Container / Component / Dynamic / Deployment). Output: `wiki/architecture/<topic>.md` with the diagrams plus a `## Decisions Surfaced` list that `/wiki-adr` consumes. Refuses to draw without a one-sentence purpose; refuses all five C4 levels without per-level justification. |
 | `/wiki-adr <title>` | Open a new Architectural Decision Record at `wiki/decisions/NNNN-<kebab-title>.md`. Refuses to proceed without a triggering ASR (architecturally-significant requirement). When an architecture page exists for the topic, the title must match a bullet under its `## Decisions Surfaced`. Defaults to the Nygard template; promotes to MADR when alternatives need preserved analysis; offers Y-Statement for one-liners. Refuses to edit `accepted` ADRs — opens a superseding one instead. Upserts `→ ADR-NNNN` onto the matching architecture-page bullet. |
-| `/wiki-kanban-emit <spec-slug>` | Decompose a `wiki/specs/<slug>.md` spec onto a [Hermes Kanban](https://github.com/NousResearch/hermes) board: one parent task, one child per Gherkin scenario, plus an aggregator. Each task body carries goal, acceptance criteria, the Gherkin block, an inlined ubiquitous-language glossary, the ADR id(s), a `@wiki-spec` tag, and a verbatim `## Required Handoff` schema. Idempotency keys are per-scenario (editing one scenario re-emits only that child). Every task is pinned with `--skill wiki-maintainer --skill kanban-worker --tenant <bounded-context>`. **Refuses to emit while the spec is not on `origin/<trunk>`.** **Requires `hermes` on PATH.** |
-| `/wiki-kanban-ingest <task-id\|run-id>` | Round-trip a completed Hermes run back onto the originating wiki page. Walks **every** attempt (not just the latest) via `hermes kanban runs --json`; emits `### Attempt N` subsections plus a final `## Implementation Evidence` block. **Refuses to ingest while the worker's `branch_head` is not on `origin/<trunk>`.** Validates the `## Required Handoff` schema — missing keys abort with a named error. Sanitizes the structured handoff — refuses to copy tokens, OAuth material, or raw logs. **Requires `hermes` on PATH.** |
+| `/wiki-kanban-board <slug>` | Bind a Hermes Kanban board to this wiki — create the board if absent, verify the orchestrator/worker/reviewer Hermes profiles have the required skills, and write `kanban/board.yaml` with the slug, profile mapping, and default workspace shape (`dir:./project` or `worktree`). Rewrites the `<!-- CUSTOMIZE -->` block on `## Kanban Board` of `AGENTS.md`. Satisfies the manifest artifact `board_bound`, which gates emit and ingest. **Requires `hermes` on PATH.** |
+| `/wiki-kanban-emit <spec-slug>` | Decompose a `wiki/specs/<slug>.md` spec onto the bound [Hermes Kanban](https://github.com/NousResearch/hermes) board: one parent task, one child per Gherkin scenario, plus an aggregator. Each task body carries goal, acceptance criteria, the Gherkin block, an inlined ubiquitous-language glossary, the ADR id(s), a `@wiki-spec` tag, and a verbatim `## Required Handoff` schema. Idempotency keys are per-scenario (editing one scenario re-emits only that child). Every task is pinned with `--board <slug>`, `--workspace dir:$(realpath ./project)` or `--workspace worktree` (per `board.yaml`), `--skill wiki-maintainer --skill kanban-worker --tenant <bounded-context>`. **Refuses to emit while the spec is not on `origin/<trunk>` or the board is not bound.** **Requires `hermes` on PATH.** |
+| `/wiki-kanban-ingest <task-id\|run-id>` | Round-trip a completed Hermes run back onto the originating wiki page. Walks **every** attempt (not just the latest) via `hermes kanban runs --board <slug> --json`; writes `kanban/handoffs/<task-id>.<run-id>.json` per attempt; emits `### Attempt N` subsections plus a final `## Implementation Evidence` block referencing each handoff file. **Refuses to ingest while the worker's `branch_head` is not on `origin/<trunk>` or the board is not bound.** Validates the `## Required Handoff` schema — missing keys abort with a named error. Sanitizes the structured handoff — refuses to copy tokens, OAuth material, or raw logs. **Requires `hermes` on PATH.** |
 | `/wiki-triage <note> [--from <page>]` | Park a wiki-side open question as a Hermes triage-column task with a `@wiki-source` tag pointing back to the originating page (typically a grill or architecture `## Open Questions` entry). The wiki is the source of truth for *answered* questions; triage is the durable inbox for *unanswered* ones. **Requires `hermes` on PATH.** |
 | `/wiki-triage-promote <task-id>` | Expand a triage-column one-liner into a real spec via Hermes' [`kanban specify`](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban#cli-reference) (P9 specifier pattern), then hand the structured output to `/wiki-spec`. **Requires `hermes` on PATH.** |
 | `/wiki-refine <run-id\|note>` | Close the refinement loop when a run outcome or breakthrough invalidates a prior model — update concept/context pages, open a superseding ADR via `/wiki-adr`, re-emit affected kanban tasks via `/wiki-kanban-emit` with a fresh idempotency key. |
 
 ### Optional runtime dependency
 
-`hermes` (https://github.com/NousResearch/hermes) is required only for `/wiki-kanban-emit`, `/wiki-kanban-ingest`, `/wiki-triage`, `/wiki-triage-promote`, and the kanban-aware lint checks. Everything else — ingest, query, grill, architecture, spec, ADR, strategy, refinement-as-documentary, flashcards, presentations, PDF→mdBook — works without it. The kanban-side prompts preflight `hermes kanban assignees` and abort with an install hint if it is missing; they never silently degrade.
+`hermes` (https://github.com/NousResearch/hermes) is required only for `/wiki-kanban-board`, `/wiki-kanban-emit`, `/wiki-kanban-ingest`, `/wiki-triage`, `/wiki-triage-promote`, and the kanban-aware lint checks (handoff completeness, board drift). Everything else — ingest, query, grill, architecture, spec, ADR, strategy, project-init, refinement-as-documentary, flashcards, presentations, PDF→mdBook — works without it. The kanban-side prompts preflight `hermes kanban assignees` and abort with an install hint if it is missing; they never silently degrade.
 
 ### Pipeline manifest
 
-`wiki/.pipeline.yaml` declares the artifact order (`strategy → grill → architecture → adr → spec → kanban_emit → kanban_ingest → refine`) and the prereqs each command checks before running. Every slash command calls `scripts/check-prereqs.sh <artifact>` and aborts on the first missing prereq. See [`docs/rd-pipeline/pipeline-manifest.md`](./docs/rd-pipeline/pipeline-manifest.md) for the schema. Wikis without `.pipeline.yaml` continue working unchanged — absence == "no enforcement" by design.
+`wiki/.pipeline.yaml` declares the artifact order (`strategy → grill → architecture → adr → spec → kanban_emit → kanban_ingest → refine`, plus the infrastructure artifacts `project_init` and `board_bound` which gate the kanban round-trip) and the prereqs each command checks before running. Every slash command calls `scripts/check-prereqs.sh <artifact>` and aborts on the first missing prereq. See [`docs/rd-pipeline/pipeline-manifest.md`](./docs/rd-pipeline/pipeline-manifest.md) for the schema. Wikis without `.pipeline.yaml` continue working unchanged — absence == "no enforcement" by design.
+
+### `project/`, `wiki/`, and `kanban/`
+
+Every wiki bootstrapped from the bundled template ships three sibling directories:
+
+- **`project/`** — the actual implementation. The wiki documents *about* the project; this tree *is* the project. Every `changed_files` path written back into a spec's `## Implementation Evidence` section by `/wiki-kanban-ingest` must resolve under `project/` (enforced by `/wiki-lint`'s evidence-path check).
+- **`wiki/`** — the knowledge base proper. Concepts, contexts, ADRs, specs, glossary. The R&D pipeline operates here.
+- **`kanban/`** — the Hermes-staging directory. Holds `board.yaml` (single source of truth for the board slug, profile mapping, and workspace shape, written by `/wiki-kanban-board`), `handoffs/<task-id>.<run-id>.json` (per-attempt sanitized metadata written by `/wiki-kanban-ingest`), `profiles/README.md` (documentation), `.worktrees/` and `logs/` (gitignored).
+
+`board.yaml` is the binding that makes `/wiki-kanban-emit` and `/wiki-kanban-ingest` per-wiki rather than per-operator. Without it, those commands fall back to whichever Hermes board the operator currently has active — rarely what you want for a multi-wiki workflow.
 
 ### Skill (alternative entry point)
 
 ```
 /skill:wiki-maintainer new <domain>
+/skill:wiki-maintainer project-init
 /skill:wiki-maintainer ingest <path>
 /skill:wiki-maintainer query <question>
 /skill:wiki-maintainer spec <goal>
@@ -91,6 +104,7 @@ Run `pi` inside any directory that already has an `AGENTS.md` matching the llm-w
 /skill:wiki-maintainer grill <topic>
 /skill:wiki-maintainer architecture <topic>
 /skill:wiki-maintainer adr <decision title>
+/skill:wiki-maintainer kanban-board <slug>
 /skill:wiki-maintainer kanban-emit <spec-slug>
 /skill:wiki-maintainer kanban-ingest <task-id|run-id>
 /skill:wiki-maintainer triage <note> [--from <page>]

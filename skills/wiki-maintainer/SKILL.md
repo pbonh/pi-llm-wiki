@@ -1,6 +1,6 @@
 ---
 name: wiki-maintainer
-description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards, Marp presentations, and Gherkin specs, derive vision/contexts/context-maps via strategic design, grill open design questions, draw C4 architecture diagrams, manage ADRs, emit & round-trip Hermes Kanban tasks, run the refinement loop, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
+description: Maintain an llm-wiki knowledge base — ingest sources, answer queries, lint pages, generate flashcards, Marp presentations, and Gherkin specs, derive vision/contexts/context-maps via strategic design, grill open design questions, draw C4 architecture diagrams, manage ADRs, scaffold the project/ implementation workspace, bind a Hermes Kanban board, emit & round-trip Hermes Kanban tasks, run the refinement loop, or bootstrap a new wiki. Use in any directory containing an AGENTS.md that follows the llm-wiki schema.
 ---
 
 # wiki-maintainer
@@ -19,7 +19,7 @@ This is the **omnibus skill**: it bundles every subcommand below. For composable
 - `wiki-architecture` — C4 diagrams phase only.
 - `wiki-adr` — ADR workflow only.
 - `wiki-spec` — Gherkin spec synthesis only.
-- `wiki-kanban` — Kanban emit + ingest + triage (requires `hermes` on PATH).
+- `wiki-kanban` — Kanban board-binding + emit + ingest + triage (requires `hermes` on PATH).
 
 The per-phase skills all delegate to the same `AGENTS.md` workflow sections, so any one of them is sufficient on its own. Use `wiki-maintainer` when you want one entry point that knows them all; use a focused skill when you want a smaller surface that composes with other agent workflows.
 
@@ -190,11 +190,26 @@ Run the ADR workflow to open a new [[concepts/architectural-decision-record]] in
 
 Status is load-bearing for downstream workflows — `/wiki-spec` warns when no `accepted` ADR governs the domain, and `/wiki-kanban-emit` picks the collaboration pattern from status.
 
+### `kanban-board <slug>`
+
+Bind a Hermes Kanban board to this wiki. Replaces the placeholder `kanban/board.yaml` (written by `project-init` or `pi-llm-wiki-init`) with a validated configuration: board slug, profile-to-role mapping (orchestrator / worker / reviewer), and default workspace shape (`dir:./project` or `worktree`). Satisfies the manifest artifact `board_bound`, which gates `kanban-emit` and `kanban-ingest`.
+
+**Preflight (hard).** `scripts/check-prereqs.sh project_init` must exit 0 (run `project-init` first). `hermes kanban assignees` must succeed (install hint otherwise). `<slug>` must match `^[a-z0-9][a-z0-9_-]{0,63}$`.
+
+1. `hermes kanban boards list --json`; create the board with `hermes kanban boards create <slug>` if absent (no `--switch`). Idempotent re-bind on existing slug.
+2. Resolve role assignments — CLI flags > existing `board.yaml` values > prompt the user (with `hermes kanban assignees --json` as suggestions).
+3. For each profile, verify required skills via `hermes -p <profile> skills list`: `kanban-orchestrator` for orchestrator; `kanban-worker` for worker and reviewer. Missing → abort with `hermes -p <profile> skills reset <skill> --restore` hint.
+4. Resolve `workspace_default` (`dir:./project` default; `worktree` opt-in).
+5. Write `kanban/board.yaml` (preserve top comment block; drop the `<!-- CUSTOMIZE -->` marker). Rewrite the matching marker in `## Kanban Board` of `AGENTS.md`.
+6. Smoke-test with `hermes kanban --board <slug> list` (must exit 0). Append a dated entry to `wiki/log.md`.
+
+Re-running with the same slug + unchanged profiles is a no-op. Different slug rewrites the binding and warns that previously emitted tasks live on the old board (run `refine` if the rebinding invalidates prior work).
+
 ### `kanban-emit <spec-slug>`
 
 Run the Kanban Emit workflow to decompose a spec page onto a [[concepts/durable-task-board]] hosted by [[entities/hermes-agent]].
 
-**Preflight (hard).** `hermes kanban assignees` must succeed. If `hermes` is not on `PATH`, abort with the install hint pointing at https://github.com/NousResearch/hermes. Kanban emission requires Hermes; the rest of this wiki works without it.
+**Preflight (hard).** `hermes kanban assignees` must succeed. If `hermes` is not on `PATH`, abort with the install hint pointing at https://github.com/NousResearch/hermes. Kanban emission requires Hermes; the rest of this wiki works without it. `kanban/board.yaml` must exist with non-empty `board:` and `profiles.{orchestrator,worker,reviewer}` (run `kanban-board <slug>` first).
 
 **ADR gate (soft).** If the spec cites no `accepted` ADR, warn the user and offer to hand off to `/wiki-adr` first. Proceed on confirmation; record the choice in the spec's `## Sources`.
 
@@ -203,7 +218,7 @@ Run the Kanban Emit workflow to decompose a spec page onto a [[concepts/durable-
 3. Compute idempotency key: `<spec-slug>:<adr-id>:<sha256(spec-body)>` per [[concepts/idempotency-key]].
 4. Enumerate Hermes profiles via the preflight output; map logical roles (`implementer`/`reviewer`/`integrator`) to real profile names. Fail loudly on missing mappings.
 5. Pick the [[concepts/collaboration-pattern]] from ADR status: `accepted` → P2 pipeline; `proposed` → P5 human-in-the-loop; multiple feature files → P1 fan-out parent; `deprecated`/`superseded` without successor → refuse to emit.
-6. Decompose into one `kanban_create` per user story. Each task body MUST include goal, approach, acceptance criteria verbatim, Gherkin block fenced, inlined glossary excerpt, wiki backlink, ADR id(s), and a `@wiki-spec` tag.
+6. Decompose into one `kanban_create` per user story. Each `kanban_create` MUST pass `--board <slug>` (from `kanban/board.yaml`), `--workspace` resolved from `workspace_default` (`--workspace dir:$(realpath ./project)` for `dir:./project`; `--workspace worktree` for `worktree`), `--skill wiki-maintainer`, `--skill kanban-worker`, and `--tenant <bounded-context>`. Each task body MUST include goal, approach, acceptance criteria verbatim, Gherkin block fenced, inlined glossary excerpt, wiki backlink, ADR id(s), `@wiki-spec` tag, and the `## Required Handoff` schema verbatim from `prompts/_handoff-schema.md`.
 7. Express ordering with `parents=[...]`. Reject relative `workspace=dir:` paths.
 8. Append a `## Kanban Tasks` section to the spec page recording the key, ADR ids, pattern, profile mapping, and task ids.
 9. Zero-dangling-links acceptance gate on the updated spec page.
@@ -215,15 +230,16 @@ Run the Kanban Emit workflow to decompose a spec page onto a [[concepts/durable-
 
 Run the Kanban Ingest workflow to round-trip a completed Hermes run back into the wiki as a [[concepts/living-documentation]] receipt.
 
-**Preflight (hard).** Same `hermes kanban assignees` check as `kanban-emit`. Abort with the same install-hint message if Hermes is unavailable.
+**Preflight (hard).** Same `hermes kanban assignees` check as `kanban-emit`. Abort with the same install-hint message if Hermes is unavailable. `kanban/board.yaml` must exist with non-empty `board:` (run `kanban-board <slug>` first); `--board <slug>` is passed to every `hermes kanban` invocation.
 
-1. Fetch the run via `hermes kanban show <id>` (or db-layer equivalent). Capture `summary`, `verification`, `changed_files`, `residual_risk`, and the [[concepts/structured-handoff]] payload.
+1. Fetch the task's run history via `hermes kanban runs <id> --board <slug> --json` (oldest-first; walk every attempt). Capture per run: `summary`, `verification`, `changed_files`, `residual_risk`, the [[concepts/structured-handoff]] payload, `metadata.branch_head`, `run_id`, `completed_at`.
 2. **Sanitize.** Refuse to copy tokens, OAuth material, raw logs, or unrelated transcripts. If metadata is dirty, surface to the user and stop — do not silently scrub.
-3. Locate the originating wiki page via the `@wiki-spec` tag or wiki backlink.
-4. Append a `## Implementation Evidence` section: run id, timestamp, assignee, `verification` + result, `changed_files`, `residual_risk`, one-paragraph summary. On re-ingest, add a new dated subheading.
-5. Update the target's frontmatter `updated` field.
-6. Zero-dangling-links acceptance gate.
-7. Append to `wiki/log.md`.
+3. **Write per-attempt handoff JSON files.** For each completed run, write `kanban/handoffs/<task-id>.<run-id>.json` containing the sanitized `metadata` augmented with `task_id`, `run_id`, `completed_at`, `board`. Per-attempt naming mirrors the `### Attempt N` subsections in step 5; never overwrite. Existing file with identical bytes → no-op; with different bytes → abort (a Hermes run was retried in place; investigate).
+4. Locate the originating wiki page via the `@wiki-spec` tag or wiki backlink (cross-check against the handoff's `wiki_spec`).
+5. Append a `## Implementation Evidence` section: per-attempt `### Attempt N` subsections plus a final block with run id, timestamp, assignee, `verification` + result, `changed_files`, `residual_risk`, `branch_head`, the relative path to the matching `kanban/handoffs/...json`, one-paragraph summary. On re-ingest, add a new dated subheading.
+6. Update the target's frontmatter `updated` field.
+7. Zero-dangling-links acceptance gate.
+8. Append to `wiki/log.md`.
 
 If the run failed, still ingest — mark `Result: failed` and quote the failure reason. Documenting failures honestly is the point of living documentation.
 
@@ -284,6 +300,20 @@ Bootstrap an llm-wiki in the current directory for `<domain>`. Works in either a
 7. If the directory is a git repo, commit: `Customize llm-wiki for <domain>`.
 
 Leave `raw/` empty — the user adds sources after bootstrap.
+
+### `project-init`
+
+Scaffold the implementation workspace (`project/`) and the kanban staging directory (`kanban/`), then walk the customization marker on `## Implementation Workspace` of `AGENTS.md`. Bootstrap-only — does not bind a Hermes board (that is `kanban-board <slug>`). Satisfies the manifest artifact `project_init`.
+
+**Preflight (soft).** `scripts/check-prereqs.sh project_init --quiet --json` exit 0 → "already initialized", stop. `AGENTS.md` must contain a `## Implementation Workspace` section (else re-run `new` against the latest template).
+
+1. Copy any missing files from the bundled `template/project/` and `template/kanban/` into the wiki root. Existing files are kept (operator edits win).
+2. Walk the `<!-- CUSTOMIZE ... -->` block in `project/README.md`. Prompt one field at a time: `language`, `build`, `test`, `entry`. Confirm before writing.
+3. Rewrite the marker in `project/README.md` (block disappears) and the matching marker in `## Implementation Workspace` of `AGENTS.md` coherently.
+4. Append language-appropriate ignores to `project/.gitignore` via a small lookup table (Rust → `*.tsbuildinfo`-like extras, Python → `*.egg-info/`, etc.).
+5. Re-run `scripts/check-prereqs.sh project_init --json` — must exit 0. Append a dated entry to `wiki/log.md`.
+
+Re-runnable: a satisfied `project_init` artifact reports "already initialized" and exits 0 without prompting.
 
 ## Rules (from AGENTS.md, repeated for safety)
 

@@ -43,14 +43,24 @@ artifacts:
     requires: [adr]
     command: /wiki-spec
 
+  project_init:
+    produces: project/README.md
+    requires: []
+    command: /wiki-project-init
+
+  board_bound:
+    produces: kanban/board.yaml
+    requires: [project_init]
+    command: /wiki-kanban-board
+
   kanban_emit:
     produces: kanban://{board}/{tenant}/{slug}
-    requires: [spec, "git:spec-on-trunk"]
+    requires: [spec, board_bound, "git:spec-on-trunk"]
     command: /wiki-kanban-emit
 
   kanban_ingest:
     produces: "wiki/specs/{slug}.md#implementation-evidence"
-    requires: ["git:worker-branch-merged"]
+    requires: [board_bound, "git:worker-branch-merged"]
     command: /wiki-kanban-ingest
 
   refine:

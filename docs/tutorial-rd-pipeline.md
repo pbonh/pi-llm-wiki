@@ -66,6 +66,62 @@ You can check whether you have enough by running:
 
 If the answer is concrete (three or four distinct vocabularies, distinct entities, distinct invariants), proceed. If it is generic, ingest more sources first.
 
+## 1b. `/wiki-project-init` — scaffold the implementation workspace
+
+Before you start producing artifacts the kanban round-trip will reference (specs → tasks → evidence), give the implementation a home:
+
+```
+/wiki-project-init
+```
+
+The command:
+
+1. Drops `project/` and `kanban/` into the wiki root from the bundled `pi-llm-wiki` template (idempotent — existing files are kept).
+2. Walks the `<!-- CUSTOMIZE -->` block in `project/README.md` and `## Implementation Workspace` of `AGENTS.md`. Asks for `language`, `build`, `test`, `entry`. For our shipping-rate API:
+
+   - `language: python`
+   - `build: uv pip install -e .`
+   - `test: pytest -q`
+   - `entry: python -m shipping_rates.server`
+
+3. Appends Python-specific entries to `project/.gitignore` (`*.egg-info/`, `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`).
+4. Verifies the manifest gate `project_init` flips green.
+
+After it runs:
+
+- `project/README.md` describes the implementation in one paragraph.
+- The `## Implementation Workspace` section of `AGENTS.md` records the same four values in a non-`<!--` block.
+- `kanban/board.yaml` is still the placeholder (with its `<!-- CUSTOMIZE -->` marker) — that is the next step's job.
+
+## 1c. `/wiki-kanban-board` — bind a Hermes board
+
+```
+/wiki-kanban-board shipping-rate-api
+```
+
+The command:
+
+1. Confirms `project_init` is satisfied (else aborts with `/wiki-project-init` hint).
+2. Confirms `hermes kanban assignees` succeeds (else aborts with install hint).
+3. Validates the slug against `^[a-z0-9][a-z0-9_-]{0,63}$`.
+4. Creates the board via `hermes kanban boards create shipping-rate-api` (or reuses if present — idempotent re-bind).
+5. Prompts you for the orchestrator / worker / reviewer profiles, suggesting names from `hermes kanban assignees --json`. For each profile, verifies the required skill is present via `hermes -p <profile> skills list` (`kanban-orchestrator` for orchestrator; `kanban-worker` for worker and reviewer). Missing skills abort with the `skills reset --restore` hint.
+6. Asks whether you want `workspace_default: dir:./project` (the default — `project/` is mounted as the worker's working directory) or `worktree` (each worker creates a git worktree under `kanban/.worktrees/<id>/`). For an early-stage project, `dir:./project` is simpler; switch to `worktree` once you have multiple workers running concurrently.
+7. Writes `kanban/board.yaml`, rewrites the matching `<!--` marker in `## Kanban Board` of `AGENTS.md`, and smoke-tests with `hermes kanban --board shipping-rate-api list` (must exit 0).
+
+Verify:
+
+```bash
+hermes kanban --board shipping-rate-api list   # → empty board, exit 0
+grep -c '<!--' kanban/board.yaml               # → 0 (marker filled in)
+scripts/check-prereqs.sh kanban_emit --slug any-spec --json
+# → {"artifact":"kanban_emit","missing":"spec","hint":"run /wiki-spec first"}
+# (NOT missing: board_bound — that's the proof board_bound is satisfied. The
+# missing spec is expected; we haven't written one yet.)
+```
+
+The kanban round-trip (`/wiki-kanban-emit` and `/wiki-kanban-ingest`) refuses to run until `board_bound` is satisfied. From here on, every emitted task carries `--board shipping-rate-api` and every round-trip writes a `kanban/handoffs/<task-id>.<run-id>.json` per attempt.
+
 ## 2. `/wiki-strategy` — distill vision + bounded contexts + context map
 
 ```
@@ -251,9 +307,14 @@ The workflow:
    - The ADR id(s) cited by the spec.
    - A `@wiki-spec` traceability tag.
    - A `## Required Handoff` section verbatim from [`prompts/_handoff-schema.md`](../prompts/_handoff-schema.md), spelling out the JSON keys (`changed_files`, `verification`, `dependencies`, `blocked_reason`, `retry_notes`, `residual_risk`, `branch_head`, `wiki_spec`, `wiki_adr_ids`) the worker must return on `metadata`. **New in Phase 5d:** `/wiki-kanban-ingest` validates this shape on round-trip and refuses to ingest runs whose handoff is missing keys.
-8a. **Skill pinning + tenant.** **New in Phase 5c:** every `kanban_create` call passes `--skill wiki-maintainer --skill kanban-worker --tenant <bounded-context-slug>` (tenant derives from the spec's `frontmatter.context`, falling back to `default`). `hermes kanban list --tenant <ctx>` then returns only that context's work.
+8a. **Per-task metadata.** Every `kanban_create` call passes:
+    - `--board <slug>` — read from `kanban/board.yaml`'s `board:` field. Without this, tasks land on the operator's currently-active board, rarely what you want. (`shipping-rate-api` for our worked example.)
+    - `--workspace` — resolved from `kanban/board.yaml`'s `workspace_default`. `dir:./project` becomes `--workspace dir:$(realpath ./project)` (Hermes rejects relative paths). `worktree` becomes `--workspace worktree`, with a one-line task-body comment instructing the worker to root the worktree under `kanban/.worktrees/<id>/`.
+    - `--skill wiki-maintainer --skill kanban-worker` — closes the loop with the wiki-maintainer workflows.
+    - `--tenant <bounded-context-slug>` — derives from the spec's `frontmatter.context`, falling back to `default`. `hermes kanban --board shipping-rate-api list --tenant <ctx>` then returns only that context's work.
+    - **Profiles map via `kanban/board.yaml`'s `profiles:` section** — `orchestrator` runs the fan-out, `worker` runs implementation tasks, `reviewer` runs review/aggregator tasks. P2 pipeline → `worker` → `reviewer`; P3 quorum → N `worker` siblings + 1 `reviewer` aggregator.
 9. **Express ordering** with `parents=[...]` on each `kanban_create`. The reviewer task's `parents` is the implementer; the integrator's `parents` is the reviewer; the human-gate's `parents` is whatever it gates.
-10. **Workspace selection.** Tasks that mutate the wiki use `workspace=dir:<absolute path>`. Tasks that touch a code repo prefer `worktree`. Relative paths are rejected at dispatch (the [confused-deputy](https://en.wikipedia.org/wiki/Confused_deputy_problem) guard).
+10. **Workspace selection** is already determined by `workspace_default` (step 8a). Relative paths are rejected at dispatch (the [confused-deputy](https://en.wikipedia.org/wiki/Confused_deputy_problem) guard).
 11. **Record task ids on the spec page.** Append a `## Kanban Tasks` section listing: idempotency key, ADR ids, collaboration pattern, profile mapping, and each task's id + role + assignee.
 12. Run the zero-dangling-links acceptance gate on the updated spec page.
 13. Append to `wiki/log.md` with the same metadata.
@@ -285,11 +346,12 @@ The workflow:
 3. **Git discipline check.** Pull `metadata.branch_head` from the handoff; run `scripts/check-prereqs.sh kanban_ingest --branch-head <sha>`. The `git:worker-branch-merged` check refuses while the branch is unmerged.
 4. **Sanitize metadata.** The structured-handoff contract forbids tokens, OAuth material, raw logs, and unrelated transcripts. The agent copies summaries and pointers (file paths, commit hashes, run ids, URLs) and **refuses to copy secrets or raw logs even if they appear in the payload.** If the metadata is dirty, the agent surfaces the problem to you and stops — it does not silently scrub-and-copy.
 5. Locate the originating wiki page from the task body's `@wiki-spec` tag or the wiki backlink. Normally `wiki/specs/<spec-slug>.md`; for refinement-driven re-runs it may be a concept page.
-6. Append an `## Implementation Evidence` section to the target page. Multi-attempt tasks get one `### Attempt N: <outcome>` subsection per non-final run (with `retry_notes` and `blocked_reason` quoted), then a final block with: run id, completion timestamp, assignee profile, `verification` command(s) + their result, `changed_files` (linked to the repo when possible), `residual_risk`, `branch_head`, and a one-paragraph summary from the structured handoff.
+6. **Write per-attempt handoff JSON files.** For each completed run, write `kanban/handoffs/<task-id>.<run-id>.json` containing the sanitized `metadata` augmented with `task_id`, `run_id`, `completed_at`, `board`. Per-attempt naming mirrors the `### Attempt N` subsections in step 7 — there is one JSON file per attempt, never overwritten. These files feed `/wiki-refine` (which reads them to reason structurally about `changed_files` and `wiki_adr_ids` without re-parsing prose) and the `handoff completeness` lint check (which asserts every completed run has a matching file).
+7. Append an `## Implementation Evidence` section to the target page. Multi-attempt tasks get one `### Attempt N: <outcome>` subsection per non-final run (with `retry_notes` and `blocked_reason` quoted), then a final block with: run id, completion timestamp, assignee profile, `verification` command(s) + their result, `changed_files` (linked to the repo when possible), `residual_risk`, `branch_head`, the relative path to the matching `kanban/handoffs/<task-id>.<run-id>.json`, and a one-paragraph summary from the structured handoff.
    - **On re-ingest of a different run, append a new dated subheading rather than overwriting.** The evidence section accumulates honestly.
-7. Update frontmatter `updated` on the target page and any `## Sources` row that points at the spec or concept.
-8. Run the zero-dangling-links acceptance gate.
-9. Append to `wiki/log.md` with run id, target page, verification outcome, attempt count, and any residual risk.
+8. Update frontmatter `updated` on the target page and any `## Sources` row that points at the spec or concept.
+9. Run the zero-dangling-links acceptance gate.
+10. Append to `wiki/log.md` with run id, target page, verification outcome, attempt count, residual risk, and the per-attempt handoff file paths.
 
 **Failed runs are still ingested.** A section is appended with `Result: failed` and the failure reason quoted from the handoff. Documenting failures honestly is the whole point — the next attempt has the prior failure's context.
 
